@@ -1,0 +1,78 @@
+{
+    "author": "Jan Jacobs",
+    "dependencies": {
+        "pebble-clay": "^1.0.2"
+    },
+    "keywords": [],
+    "name": "alternating-tidbits",
+    "pebble": {
+        "capabilities": [
+            "location",
+            "configurable",
+            "health"
+        ],
+        "displayName": "Alternating Tidbits",
+        "enableMultiJS": true,
+        "messageKeys": [
+            "JSReady",
+            "Err",
+            "Fetch",
+            "Temperature",
+            "Condition",
+            "Sunrise",
+            "Sunset",
+            "cfgColorPrimary",
+            "cfgColorSecondary",
+            "cfgColorAccent",
+            "cfgColorBackground",
+            "cfgTemperatureUnits",
+            "cfgWeatherProvider",
+            "cfgWeatherOWMKey",
+            "cfgWeatherFIOKey",
+            "cfgWeatherLocPhone",
+            "cfgWeatherLocLat",
+            "cfgWeatherLocLong",
+            "cfgWeatherRefresh",
+            "cfgWeatherMasterKey",
+            "cfgDateFormatTop",
+            "cfgDateFormatBottom",
+            "cfgDateHoursLeadingZero"
+        ],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "fonts/icons_30",
+                    "name": "FONT_ICONS_30",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9:]",
+                    "file": "fonts/sparkler_54",
+                    "name": "FONT_SPARKLER_54",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "characterRegex": ".",
+                    "file": "fonts/expressway_16",
+                    "name": "FONT_EXPRESSWAY_18",
+                    "targetPlatforms": null,
+                    "type": "font"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk"
+        ],
+        "uuid": "5e843fcb-4327-40c1-b6f5-3ce0e2356b7b",
+        "watchapp": {
+            "watchface": true
+        }
+    },
+    "version": "1.0.0"
+}
