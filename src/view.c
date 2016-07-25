@@ -34,14 +34,13 @@ struct Fonts {
   GFont icons;
 };
 
-struct Layers dummyLayers; // See nasty comment below
 struct View {
   Window *window;
   struct Layers layers;
   struct Fonts fonts;
   
   // Alternating layer info
-  struct Layer *alt_layers[sizeof(dummyLayers) / 4 - 5]; // Very nasty trick to avoid forgetting to increase the array size
+  struct Layer *alt_layers[sizeof(struct Layers) / sizeof(Layer*) - 5]; // Very nasty trick to avoid forgetting to increase the array size
   int alt_layer_count;
   int alt_layer_visible;
   
@@ -135,7 +134,7 @@ void error_update_proc(Layer *layer, GContext *ctx) {
       break; 
     case ERROR_WEATHER:
       symbol = ICON_NO_WEATHER;
-      text = "Weather issue";
+      text = " Weather issue";
       break; 
     default:
       // Bleutooth ok once again alert
@@ -493,13 +492,6 @@ void alternating_layers_remove(Layer* layer) {
   } 
 }
 
-void remove_error_layer() {
-  // Hide error layer
-  alternating_layers_remove(view.layers.error);
-  layer_destroy(view.layers.error);
-  view.layers.error = NULL;
-}
-
 static void alert_timeout_handler(void *context) {
   // Clear the suspension
   view.suspension_reason &= ~SUSPENSION_ERROR_ALERT;
@@ -509,20 +501,32 @@ static void alert_timeout_handler(void *context) {
   
   // Deregister timeout handler
   view.alert_timeout_handler = NULL;
+    
+  // Remove error layer when no longer in error
+  if (model->error == ERROR_NONE) {
+    alternating_layers_remove(view.layers.error);
+    layer_destroy(view.layers.error);
+    view.layers.error = NULL;
+  }
 }
 
-static void alert_and_remove_timeout_handler(void *context) {
-  // Remove suspension
-  alert_timeout_handler(context);
+void error_changed() {
+  // Check if error layer is allready visible
+  if (view.layers.error == NULL) {
+    // Create error layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+
+    view.layers.error = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
+    layer_set_update_proc(view.layers.error, error_update_proc);
+    alternating_layers_add(view.layers.error);
+  }
   
-  // Remove error layer
-  remove_error_layer();
-}
-
-void alert_error(AppTimerCallback callback) {
   // Set suspension
-  view.suspension_reason |= SUSPENSION_ERROR_ALERT;
-  view.suspension_return_layer = view.alt_layer_visible;
+  if (!(view.suspension_reason & SUSPENSION_ERROR_ALERT)) {
+    view.suspension_reason |= SUSPENSION_ERROR_ALERT;
+    view.suspension_return_layer = view.alt_layer_visible;
+  }
   
   // Show error layer
   alternating_layers_show_layer(view.layers.error);
@@ -533,36 +537,7 @@ void alert_error(AppTimerCallback callback) {
   }
   
   // Shedule timeout handler to stop suspending for alert
-  view.alert_timeout_handler = app_timer_register(15000, callback, NULL); // Show as an alert for 15 seconds
-}
-
-void error_changed() {
-  if (model->error != ERROR_NONE) {
-    // Check if error layer is allready visible
-    if (view.layers.error == NULL) {
-      // Create error layer
-      Layer *window_layer = window_get_root_layer(view.window);
-      GRect bounds = layer_get_bounds(window_layer);
-
-      view.layers.error = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-      layer_set_update_proc(view.layers.error, error_update_proc);
-      alternating_layers_add(view.layers.error);
-    }
-
-    // Suspend alternation and show error alert
-    alert_error(alert_timeout_handler);
-  } else if (view.prev_error == ERROR_CONNECTION) {
-    // Connection error solved, show error layer and suspend alternation
-    alert_error(alert_and_remove_timeout_handler);
-  } else {
-    // Don't remove layer when in suspension
-    if (view.layers.error != NULL && !(view.suspension_reason & SUSPENSION_ERROR_ALERT)) {
-      // Remove error layer
-      remove_error_layer();
-    }
-  }
-  
-  view.prev_error = model->error;
+  view.alert_timeout_handler = app_timer_register(15000, alert_timeout_handler, NULL); // Show as an alert for 15 seconds
 }
 
 void time_changed() {
