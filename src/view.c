@@ -50,7 +50,6 @@ struct View {
   
   // Alert info
   AppTimer *alert_timeout_handler;
-  enum ErrorCodes prev_error;
 };
 
 struct View view;
