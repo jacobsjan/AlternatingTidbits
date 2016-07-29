@@ -509,7 +509,7 @@ static void alert_timeout_handler(void *context) {
   }
 }
 
-void error_changed() {
+void error_changed(enum ErrorCodes prevError) {
   // Check if error layer is allready visible
   if (view.layers.error == NULL) {
     // Create error layer
@@ -535,8 +535,13 @@ void error_changed() {
     app_timer_cancel(view.alert_timeout_handler);
   }
   
-  // Shedule timeout handler to stop suspending for alert
-  view.alert_timeout_handler = app_timer_register(15000, alert_timeout_handler, NULL); // Show as an alert for 15 seconds
+  if (model->error == ERROR_NONE && prevError != ERROR_CONNECTION) {
+    // Stop suspending for alert
+    alert_timeout_handler(NULL);
+  } else {
+    // Shedule timeout handler to stop suspending for alert
+    view.alert_timeout_handler = app_timer_register(15000, alert_timeout_handler, NULL); // Show as an alert for 15 seconds
+  }
 }
 
 void time_changed() {

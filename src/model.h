@@ -52,7 +52,7 @@ struct Model {
   int activity_duration;
   int activity_distance;
   #endif
-  void (*on_error_change)();
+  void (*on_error_change)(enum ErrorCodes prevError);
   void (*on_time_change)();
   void (*on_weather_condition_change)();
   void (*on_weather_temperature_change)();

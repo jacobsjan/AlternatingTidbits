@@ -6,10 +6,11 @@ struct Model actual_model;
 struct Model* model = &actual_model;
 
 void model_set_error(enum ErrorCodes error) {
+  enum ErrorCodes prevError = model->error;
   model->error = error;
     
   if (model->on_error_change) {
-    model->on_error_change();
+    model->on_error_change(prevError);
   }
 }
 
