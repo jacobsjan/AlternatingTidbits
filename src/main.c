@@ -22,9 +22,6 @@ struct StepStamp activity_buffer[ACTIVITY_MONITOR_WINDOW];
 int activity_buffer_index;
 #endif
 
-static void app_init();
-static void app_deinit();
-
 static bool is_asleep() {
   bool sleeping = false;
   #if defined(PBL_HEALTH) 
@@ -101,7 +98,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgColorAccent);
   if(tuple && (cfgChanged = true)) config->color_accent = GColorFromHEX(tuple->value->int32); 
   tuple = dict_find(iter, MESSAGE_KEY_cfgWeatherRefresh);
-  if(tuple && (cfgChanged = true)) { config->weather_refresh = tuple->value->int32; APP_LOG(APP_LOG_LEVEL_DEBUG, "Refresh config: %d", (int)tuple->value->int32); }
+  if(tuple && (cfgChanged = true)) config->weather_refresh = tuple->value->int32;
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateHoursLeadingZero);
   if(tuple && (cfgChanged = true)) config->date_hours_leading_zero = tuple->value->int8; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateFormatTop);
