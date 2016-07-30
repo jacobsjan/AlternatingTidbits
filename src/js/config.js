@@ -159,7 +159,7 @@ module.exports = [
         "options": [
           { 
             "label": "10 mins", 
-            "value": 10 
+            "value": 10
           },
           { 
             "label": "30 mins",
@@ -171,11 +171,11 @@ module.exports = [
           },
           { 
             "label": "2 hours",
-            "value": 120 
+            "value": 120
           },
           { 
             "label": "4 hours",
-            "value": 240 
+            "value": 240
           }
         ]
       },

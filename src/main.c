@@ -1,31 +1,27 @@
 #include <pebble.h>
 
-#include "main.h"
 #include "config.h"
 #include "model.h"
 #include "view.h"
 #include "storage.h"
 
+#define FETCH_RETRIES 5
+bool js_ready = false;
+int weather_fetch_countdown = 0;
+  
 #if defined(PBL_HEALTH)
+#define ACTIVITY_MONITOR_WINDOW 10
 struct StepStamp {
   int totalStepCount;
   int totalDistance;
   time_t time;
 };
-#endif
 
-bool is_js_ready = false;
-int retry_times = MAX_RETRIES;
-int elapsed_time_since_fetch = 0;
-static AppTimer *s_timeout_timer;
-#if defined(PBL_HEALTH)
-#define ACTIVITY_MONITOR_WINDOW 10
 struct StepStamp activity_start;
 struct StepStamp activity_buffer[ACTIVITY_MONITOR_WINDOW];
 int activity_buffer_index;
 #endif
 
-static void fetch_weather();
 static void app_init();
 static void app_deinit();
 
@@ -38,70 +34,47 @@ static bool is_asleep() {
   return sleeping;
 }
 
-static void fetch_failed_handler(void *context) {
-  // The timer elapsed because no success was reported
-  retry_times -= 1;
-  if (retry_times > 0) {
-    // Retry
-    fetch_weather();
-  } else {
-    // Stop trying but prepare for the next try
-    model_set_error(ERROR_FETCH);
-    retry_times = MAX_RETRIES;
-  }
-}
-
-static void fetch_weather() {
-  // Check bluetooth connection
-  if (!connection_service_peek_pebble_app_connection()) {
-    //Bluetooth not connected
-    model_set_error(ERROR_CONNECTION);
-  }
-  else {
-    // Bluetooth connected, check the weather
-    // Prepare outgoing message
+static bool fetch_weather() {
+  // Check bluetooth connection, JS Ready and sleeping
+  if (connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
+    // Bluetooth connected, prepare outgoing message
     DictionaryIterator *iter;
     AppMessageResult result = app_message_outbox_begin(&iter);
-    if(result != APP_MSG_OK) { // Message could not be prepared
-      fetch_failed_handler(NULL); // Retry
-    } else {
+    if(result == APP_MSG_OK) { // Message could not be prepared
       // Send outgoing message
       Tuplet value = TupletInteger(MESSAGE_KEY_Fetch, 1);
       dict_write_tuplet(iter, &value);
       dict_write_end(iter);
       
       result = app_message_outbox_send();
-      if(result != APP_MSG_OK) { // Message could not be sent
-        fetch_failed_handler(NULL); // Retry
-      }
     }
     
-    // Cancel previour retry timeout timer
-    if (s_timeout_timer) {
-      app_timer_cancel(s_timeout_timer);
-      s_timeout_timer = NULL;
-    }  
-    
-    // Schedule retry timeout timer
-    const int interval_ms = (MAX_RETRIES - retry_times + 1) * 10000; // Wait a bit longer with each retry
-    s_timeout_timer = app_timer_register(interval_ms, fetch_failed_handler, NULL);
-  }  
+    return result == APP_MSG_OK;
+  } else {
+    // Did not fetch weather
+    return false;
+  }
 }
 
 static void msg_received_handler(DictionaryIterator *iter, void *context) {
   // Handle and incoming message from the phone
   Tuple *tuple = dict_find(iter, MESSAGE_KEY_JSReady);
   if(tuple) {
-        is_js_ready = true;
-        // Watch is ready for communication, fetch weather data  
+        js_ready = true;
+        // Watch is ready for communication, is weather fetch wanted?  
         fetch_weather();
   }
   
   // Weather
   tuple = dict_find(iter, MESSAGE_KEY_Temperature);
-  if(tuple) model_set_weather_temperature(tuple->value->int32);
+  if(tuple) {
+    model_set_weather_temperature(tuple->value->int32);
+    
+    // Weather fetch was succesfull, reset fetch countdown
+    weather_fetch_countdown = config->weather_refresh;
+  }
   tuple = dict_find(iter, MESSAGE_KEY_Condition);
-  if(tuple) model_set_weather_condition(tuple->value->int32);
+    if(tuple) model_set_weather_condition(tuple->value->int32);
   tuple = dict_find(iter, MESSAGE_KEY_Sunrise);
   if(tuple) model_set_sunrise(tuple->value->int32);
   tuple = dict_find(iter, MESSAGE_KEY_Sunset);
@@ -110,17 +83,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   if(tuple) {
     // Error encountered
     model_set_error(tuple->value->int32);
-    if (model->error == ERROR_FETCH) {
-      fetch_failed_handler(NULL); // Retry
-    }
   } else  {
-    // Fetch was succesfull, cancel retry timer and reset retry count
-    retry_times = MAX_RETRIES;
-    if (s_timeout_timer) {
-      app_timer_cancel(s_timeout_timer);
-      s_timeout_timer = NULL;
-    }
-    
     // Reset error if necessary
     if (model->error != ERROR_NONE) {
       model_set_error(ERROR_NONE);
@@ -138,7 +101,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgColorAccent);
   if(tuple && (cfgChanged = true)) config->color_accent = GColorFromHEX(tuple->value->int32); 
   tuple = dict_find(iter, MESSAGE_KEY_cfgWeatherRefresh);
-  if(tuple && (cfgChanged = true)) config->weather_refresh = tuple->value->int32; 
+  if(tuple && (cfgChanged = true)) { config->weather_refresh = tuple->value->int32; APP_LOG(APP_LOG_LEVEL_DEBUG, "Refresh config: %d", (int)tuple->value->int32); }
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateHoursLeadingZero);
   if(tuple && (cfgChanged = true)) config->date_hours_leading_zero = tuple->value->int8; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateFormatTop);
@@ -160,10 +123,6 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     // Refetch weather in case weather settings were changed
     fetch_weather();
   }
-}
-
-static void msg_failed_handler(DictionaryIterator *iterator, AppMessageResult reason, void *context) {
-    fetch_failed_handler(NULL); // Retry
 }
 
 #if defined(PBL_HEALTH)
@@ -226,10 +185,19 @@ void update_health() {
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   if (units_changed & MINUTE_UNIT) {
     // Update weather
-    elapsed_time_since_fetch++;
-    if (is_js_ready && elapsed_time_since_fetch >= config->weather_refresh && !is_asleep()) {
-      elapsed_time_since_fetch = 0;
-      fetch_weather();
+    weather_fetch_countdown--;
+    if (weather_fetch_countdown <= -FETCH_RETRIES) {
+      // Ran out of retries, weather fetch failed
+      model_set_error(ERROR_FETCH);   
+      
+      // Reset fetch countdown
+      weather_fetch_countdown = config->weather_refresh;
+    } else if (weather_fetch_countdown <= 0) {
+      // Fetch weather
+      if (!fetch_weather()) {
+        // Fetching the weather was not tried, suspend countdown
+        weather_fetch_countdown++;
+      }      
     }
     
     // Update health
@@ -283,7 +251,6 @@ static void app_init() {
   // Set up watch communication
   const uint32_t inbox_size = 640;
   const uint32_t outbox_size = 64;
-  app_message_register_outbox_failed(&msg_failed_handler);
   app_message_register_inbox_received(&msg_received_handler);
   app_message_open(inbox_size, outbox_size);
   

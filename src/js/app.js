@@ -10,6 +10,7 @@ var WeatherMan = require('./js/libs/weather-man');
 var logger = require('./js/logger');
 var constants = require('./js/constants');
 var customClay = require('./js/custom-clay');
+var keys = require('message_keys');
 
 //localStorage.removeItem('clay-settings');
 // Initialize settings, don't know how to retrieve these neatly from clay
@@ -51,6 +52,9 @@ Pebble.addEventListener('webviewclosed', function(e) {
 
   // Get the keys and values from each config item
   var dict = clay.getSettings(e.response);
+  
+  // Convert weather refresh to int
+  dict[keys.cfgWeatherRefresh] = parseInt(dict[keys.cfgWeatherRefresh]);
 
   // Send settings values to watch side
   Pebble.sendAppMessage(dict, function(e) {
