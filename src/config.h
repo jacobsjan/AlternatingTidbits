@@ -10,6 +10,8 @@ struct Config {
   bool date_hours_leading_zero;
   char date_format_top[11];
   char date_format_bottom[11];
+  int battery_show_from;
+  int battery_accent_from;
   
   #if defined(PBL_HEALTH)
   #endif

@@ -28,21 +28,32 @@ module.exports = [
         "messageKey": "cfgColorPrimary",
         "defaultValue": "0x000000",
         "label": "Primary",
-        "sunlight": false
+        "sunlight": false,
+        "capabilities": ["COLOR"]
+      },
+      {
+        "type": "color",
+        "messageKey": "cfgColorPrimary",
+        "defaultValue": "0x000000",
+        "label": "Foreground",
+        "sunlight": false,
+        "capabilities": ["BW"]
       },
       {
         "type": "color",
         "messageKey": "cfgColorSecondary",
         "defaultValue": "0x555555",
         "label": "Secondary",
-        "sunlight": false
+        "sunlight": false,
+        "capabilities": ["COLOR"]
       },
       {
         "type": "color",
         "messageKey": "cfgColorAccent",
         "defaultValue": "0xAA0000",
         "label": "Accent",
-        "sunlight": false
+        "sunlight": false,
+        "capabilities": ["COLOR"]
       }
     ]
   },
@@ -77,6 +88,34 @@ module.exports = [
   {
     "type": "heading",
     "defaultValue": "Alternating Tidbits"
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Battery"
+      },
+      {
+        "type": "slider",
+        "messageKey": "cfgBatteryShowFrom",
+        "defaultValue": 100,
+        "label": "Show from or below",
+        "min": 0,
+        "max": 100,
+        "step": 10
+      },
+      {
+        "type": "slider",
+        "messageKey": "cfgBatteryAccentFrom",
+        "defaultValue": 30,
+        "label": "Accent color from or below",
+        "min": 0,
+        "max": 100,
+        "step": 10,
+        "capabilities": ["COLOR"]
+      },
+    ]
   },
   {
     "type": "section",

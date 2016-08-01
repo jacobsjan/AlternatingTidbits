@@ -36,7 +36,9 @@
             "cfgWeatherMasterKey",
             "cfgDateFormatTop",
             "cfgDateFormatBottom",
-            "cfgDateHoursLeadingZero"
+            "cfgDateHoursLeadingZero",
+            "cfgBatteryShowFrom",
+            "cfgBatteryAccentFrom"
         ],
         "projectType": "native",
         "resources": {

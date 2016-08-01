@@ -20,6 +20,8 @@ void config_init() {
     strncpy(config->date_format_top, "z", sizeof(config->date_format_top));
     strncpy(config->date_format_bottom, "B e", sizeof(config->date_format_bottom));
     config->date_hours_leading_zero = false;   
+    config->battery_show_from = 100;
+    config->battery_accent_from = 30;
   }
 }
 

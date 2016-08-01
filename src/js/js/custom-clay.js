@@ -1,6 +1,19 @@
 module.exports = function(minified) {
   var clayConfig = this;
 
+  function resizeBatteryAccent() {
+    // Resize the accent slider to match the from value
+    var batteryShowFrom = clayConfig.getItemByMessageKey('cfgBatteryShowFrom');
+    var batteryAccentFrom = clayConfig.getItemByMessageKey('cfgBatteryAccentFrom');
+    var batteryAccentFromParentSpan = batteryAccentFrom.$element.select(".input");
+    batteryAccentFromParentSpan.set('$min-width', batteryShowFrom.get() + '%');
+    batteryAccentFromParentSpan.set('$width', batteryShowFrom.get() + '%');
+      
+    // Change max of accent slider
+    if (batteryAccentFrom.get() > batteryShowFrom.get()) batteryAccentFrom.set(batteryShowFrom.get());
+    batteryAccentFrom.$manipulatorTarget.set('@max', batteryShowFrom.get());
+  }
+  
   function showWeatherProviderKey() {
     clayConfig.getItemByMessageKey('cfgWeatherMasterKey').hide();
     
@@ -40,6 +53,13 @@ module.exports = function(minified) {
   }
 
   clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function() {
+    // Battery show from
+    if (clayConfig.getItemByMessageKey('cfgBatteryAccentFrom')) { // Only available on color platforms
+      var batteryShowFrom = clayConfig.getItemByMessageKey('cfgBatteryShowFrom');
+      batteryShowFrom.on('change', resizeBatteryAccent);
+      resizeBatteryAccent();
+    }
+    
     // Weather provider
     var weatherProvider = clayConfig.getItemByMessageKey('cfgWeatherProvider');
     showWeatherProviderKey.call(weatherProvider);

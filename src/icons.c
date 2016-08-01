@@ -47,20 +47,17 @@ char* icons_get_weather_condition_symbol(enum WeatherCondition code, bool is_day
 
 char* icons_get_battery_symbol(uint8_t charge, bool charging, bool plugged) {
   if (plugged) {
-    if (!charging) {
-      // Battery full;
-      return "\uf09f";
-    } else if(charge >= 100) {
+    if(charge >= 70) {
       return "\uf0aa";
-    } else if(charge >= 90) {
+    } else if(charge >= 50) {
       return "\uf0b0";
-    } else if(charge >= 80) {
-      return "\uf0af";
     } else if(charge >= 60) {
-      return "\uf0ae";
+      return "\uf0af";
     } else if(charge >= 40) {
-      return "\uf0ad";
+      return "\uf0ae";
     } else if(charge >= 20) {
+      return "\uf0ad";
+    } else if(charge >= 10) {
       return "\uf0ac";
     } else {
       return "\uf0ab";

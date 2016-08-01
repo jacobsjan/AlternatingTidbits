@@ -92,11 +92,19 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgColorBackground);
   if(tuple && (cfgChanged = true)) config->color_background = GColorFromHEX(tuple->value->int32);
   tuple = dict_find(iter, MESSAGE_KEY_cfgColorPrimary);
-  if(tuple && (cfgChanged = true)) config->color_primary = GColorFromHEX(tuple->value->int32);
+  if(tuple && (cfgChanged = true)) {
+    config->color_primary = GColorFromHEX(tuple->value->int32);
+    #if defined(PBL_BW)
+    config->color_secondary = config->color_primary;
+    config->color_accent = config->color_primary;
+    #endif
+  }
+  #if !defined(PBL_BW)
   tuple = dict_find(iter, MESSAGE_KEY_cfgColorSecondary);
   if(tuple && (cfgChanged = true)) config->color_secondary = GColorFromHEX(tuple->value->int32);
   tuple = dict_find(iter, MESSAGE_KEY_cfgColorAccent);
   if(tuple && (cfgChanged = true)) config->color_accent = GColorFromHEX(tuple->value->int32); 
+  #endif
   tuple = dict_find(iter, MESSAGE_KEY_cfgWeatherRefresh);
   if(tuple && (cfgChanged = true)) config->weather_refresh = tuple->value->int32;
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateHoursLeadingZero);
@@ -105,9 +113,15 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   if(tuple && (cfgChanged = true)) strncpy(config->date_format_top, tuple->value->cstring, sizeof(config->date_format_top)); 
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateFormatBottom);
   if(tuple && (cfgChanged = true)) strncpy(config->date_format_bottom, tuple->value->cstring, sizeof(config->date_format_bottom)); 
-  
+  tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryShowFrom);
+  if(tuple && (cfgChanged = true)) config->battery_show_from = tuple->value->int32; 
+  #if !defined(PBL_BW)
+  tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryAccentFrom);
+  if(tuple && (cfgChanged = true)) config->battery_accent_from = tuple->value->int32; 
+  #endif
+    
   if (cfgChanged) {
-    // Hiddden function to clear crash detection history
+    // Hidden function to clear crash detection history
     if (gcolor_equal(config->color_background, GColorWhite) && gcolor_equal(config->color_primary, GColorWhite)) {
       persist_delete(STORAGE_CRASH_NUM);
       persist_delete(STORAGE_CRASH_TIMESTAMPS);
@@ -239,7 +253,7 @@ static void app_init() {
   time_t temp = time(NULL);
   struct tm *tick_time = localtime(&temp);
   model_set_time(tick_time);
-  connection_handler(bluetooth_connection_service_peek());
+  if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
   battery_handler(battery_state_service_peek());
   
   // Initialize the view

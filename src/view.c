@@ -178,7 +178,7 @@ void battery_update_proc(Layer *layer, GContext *ctx) {
   
   // Draw
   char *texts[] = { charge, "%" };
-  GColor battery_color = model->battery_charge <= 30 ? config->color_accent : config->color_secondary;
+  GColor battery_color = model->battery_charge <= config->battery_accent_from ? config->color_accent : config->color_secondary;
   draw_centered(layer, ctx, battery_icon, battery_color, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
@@ -570,6 +570,23 @@ void time_changed() {
   }
 }
 
+void battery_changed() {
+  if (view.layers.battery == NULL && model->battery_charge <= config->battery_show_from) {
+    // Create battery layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+    
+    view.layers.battery = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
+    layer_set_update_proc(view.layers.battery, battery_update_proc);
+    alternating_layers_add(view.layers.battery);
+  } else if (view.layers.battery != NULL && model->battery_charge > config->battery_show_from) {
+    // Destroy battery layer
+    alternating_layers_remove(view.layers.battery);
+    layer_destroy(view.layers.battery);
+    view.layers.battery = NULL;
+  }
+}
+
 void weather_changed() {
   if (view.layers.weather == NULL) {
     // Create weather layer
@@ -671,11 +688,6 @@ void main_window_load(Window *window) {
   
   // Update time text
   time_changed();
-  
-  // Create battery layer
-  view.layers.battery = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-  layer_set_update_proc(view.layers.battery, battery_update_proc);
-  alternating_layers_add(view.layers.battery);
 }
 
 void main_window_unload(Window *window) {
@@ -685,7 +697,7 @@ void main_window_unload(Window *window) {
   text_layer_destroy(view.layers.minute);
   layer_destroy(view.layers.date_top);
   layer_destroy(view.layers.date_bottom);
-  layer_destroy(view.layers.battery);
+  if (view.layers.battery) layer_destroy(view.layers.battery);
   if (view.layers.error) layer_destroy(view.layers.error);
   if (view.layers.weather) layer_destroy(view.layers.weather);
   if (view.layers.sunrise_sunset) layer_destroy(view.layers.sunrise_sunset);
@@ -720,6 +732,7 @@ void view_init() {
   // Attach to model events
   model->on_error_change = error_changed;
   model->on_time_change = time_changed;
+  model->on_battery_change = battery_changed;
   model->on_weather_temperature_change = weather_changed;
   model->on_weather_condition_change = weather_changed;
   model->on_sunrise_change = sunrise_sunset_changed;
@@ -727,6 +740,10 @@ void view_init() {
   #if defined(PBL_HEALTH)
   model->on_activity_change = activity_changed;
   #endif
+  
+  // Initialize some layers
+  if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
+  battery_changed();
 }
 
 void view_deinit() {  
