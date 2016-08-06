@@ -100,6 +100,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     }
     
     // Restart view  
+    model_reset_events();
     view_deinit();
     view_init();
     

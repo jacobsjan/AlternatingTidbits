@@ -794,15 +794,15 @@ void view_init() {
   window_stack_push(view.window, true);
   
   // Attach to model events
-  model->on_error_change = error_changed;
-  model->on_time_change = time_changed;
-  if (config->enable_battery) model->on_battery_change = battery_changed;
-  if (config->enable_weather) model->on_weather_temperature_change = weather_changed;
-  if (config->enable_weather) model->on_weather_condition_change = weather_changed;
-  if (config->enable_sun) model->on_sunrise_change = sunrise_sunset_changed;
-  if (config->enable_sun) model->on_sunset_change = sunrise_sunset_changed;
+  model->events.on_error_change = error_changed;
+  model->events.on_time_change = time_changed;
+  if (config->enable_battery) model->events.on_battery_change = battery_changed;
+  if (config->enable_weather) model->events.on_weather_temperature_change = weather_changed;
+  if (config->enable_weather) model->events.on_weather_condition_change = weather_changed;
+  if (config->enable_sun) model->events.on_sunrise_change = sunrise_sunset_changed;
+  if (config->enable_sun) model->events.on_sunset_change = sunrise_sunset_changed;
   #if defined(PBL_HEALTH)
-  model->on_activity_change = activity_changed;
+  model->events.on_activity_change = activity_changed;
   #endif
   
   // Initialize some layers

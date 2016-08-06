@@ -36,6 +36,20 @@ enum Activities {
   ACTIVITY_SLEEP,
 };
 
+struct ModelEvents {
+  void (*on_error_change)(enum ErrorCodes prevError);
+  void (*on_time_change)();
+  void (*on_weather_condition_change)();
+  void (*on_weather_temperature_change)();
+  void (*on_sunrise_change)();
+  void (*on_sunset_change)();
+  void (*on_battery_change)();
+  #if defined(PBL_HEALTH)
+  void (*on_activity_change)();
+  void (*on_activity_counters_change)();
+  #endif
+};
+
 struct Model {
   enum ErrorCodes error;
   struct tm *time;
@@ -52,18 +66,11 @@ struct Model {
   int activity_duration;
   int activity_distance;
   #endif
-  void (*on_error_change)(enum ErrorCodes prevError);
-  void (*on_time_change)();
-  void (*on_weather_condition_change)();
-  void (*on_weather_temperature_change)();
-  void (*on_sunrise_change)();
-  void (*on_sunset_change)();
-  void (*on_battery_change)();
-  #if defined(PBL_HEALTH)
-  void (*on_activity_change)();
-  void (*on_activity_counters_change)();
-  #endif
+  
+  struct ModelEvents events;
 };
+
+void model_reset_events();
 
 void model_set_error(enum ErrorCodes error);
 void model_set_time(struct tm *tick_time);
