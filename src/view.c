@@ -23,6 +23,7 @@ struct Layers {
   Layer *weather;
   Layer *sunrise_sunset;
   Layer *battery;
+  Layer *timezone;
   #if defined(PBL_HEALTH)
   Layer *health;
   #endif
@@ -146,6 +147,61 @@ void error_update_proc(Layer *layer, GContext *ctx) {
   char *texts[] = { text };
   GColor symbol_color = model->error == ERROR_NONE ? config->color_secondary : config->color_accent;
   draw_centered(layer, ctx, symbol, symbol_color, sizeof(texts) / sizeof(texts[0]), texts);
+}
+
+void timezone_update_proc(Layer *layer, GContext *ctx) {
+  const int SEPARATOR = 4;
+  
+  // Format the time of the alternative timezone
+  time_t altEpoch = time(NULL) + config->timezone_offset * SECONDS_PER_MINUTE;
+  struct tm *altTime = localtime(&altEpoch);
+    
+  char hour[3];
+  char minute[3];
+  char ampm[3];
+  strftime(hour, sizeof(hour), clock_is_24h_style() ? "%H" : "%I", altTime);
+  strftime(minute, sizeof(minute), "%M", altTime);
+  if (clock_is_24h_style()) {
+    ampm[0] = 0;
+  } else {
+    strftime(ampm, sizeof(ampm), "%p", altTime);
+    ampm[0] -= 'A' - 'a';
+    ampm[1] -= 'A' - 'a';
+  }
+  
+  // Remove hours leading zero
+  if (hour[0] == '0' && !config->date_hours_leading_zero) {
+    hour[0] = hour[1];
+    hour[1] = hour[2];
+  }
+  
+  char* bottom_texts[] = { config->timezone_city };
+  int bottom_text_count = 1;
+  char* middle_texts[] = { hour, ":", minute, " ", ampm };
+  int middle_text_count = 5;
+  
+  // Calculate center alignment
+  GRect bounds = layer_get_bounds(layer);
+  GSize icon_size = graphics_text_layout_get_content_size(ICON_TIMEZONE, view.fonts.icons, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
+  GSize bottom_text_size = calculate_total_size(bounds, bottom_text_count, bottom_texts);
+  GSize middle_text_size = calculate_total_size(bounds, middle_text_count, middle_texts);
+  int max_texts_width = bottom_text_size.w > middle_text_size.w ? bottom_text_size.w : middle_text_size.w;
+  int total_width = icon_size.w + SEPARATOR + max_texts_width;
+  int icon_left = bounds.origin.x + (bounds.size.w - total_width) / 2;
+  int text_left = icon_left + SEPARATOR + icon_size.w;
+  
+  // Draw the timezone icon
+  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(34, 30), icon_size.w, icon_size.h);
+  graphics_context_set_text_color(ctx, config->color_secondary);
+  graphics_draw_text(ctx, ICON_TIMEZONE, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+  
+  // Draw the time
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30) - 20, middle_text_size.w, middle_text_size.h);
+  draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
+    
+  // Draw the city
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30), bottom_text_size.w, bottom_text_size.h);
+  draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
 }
 
 void weather_update_proc(Layer *layer, GContext *ctx) {
@@ -501,8 +557,8 @@ static void alert_timeout_handler(void *context) {
   // Deregister timeout handler
   view.alert_timeout_handler = NULL;
     
-  // Remove error layer when no longer in error
-  if (model->error == ERROR_NONE) {
+  // Remove error layer when no longer in error or when errors are disabled
+  if (model->error == ERROR_NONE || !config->enable_error) {
     alternating_layers_remove(view.layers.error);
     layer_destroy(view.layers.error);
     view.layers.error = NULL;
@@ -548,7 +604,7 @@ void time_changed() {
   // Write the current time, weekday and date into buffers
   static char s_hour_buffer[3];
   strftime(s_hour_buffer, sizeof(s_hour_buffer), clock_is_24h_style() ? "%H" : "%I", model->time);
-  static char s_minute_buffer[8];
+  static char s_minute_buffer[3];
   strftime(s_minute_buffer, sizeof(s_minute_buffer), "%M", model->time);
   static char s_weekday_buffer[10];
   strftime(s_weekday_buffer, sizeof(s_weekday_buffer), "%A", model->time);
@@ -686,6 +742,13 @@ void main_window_load(Window *window) {
   layer_set_update_proc(view.layers.date_bottom, update_proc);
   layer_add_child(window_layer, view.layers.date_bottom);
   
+  // Create the timezone layer
+  if (config->enable_timezone) {    
+    view.layers.timezone = layer_create(GRect(0, 0, bounds.size.w, 60 + PBL_IF_ROUND_ELSE(34, 30)));
+    layer_set_update_proc(view.layers.timezone, timezone_update_proc);
+    alternating_layers_add(view.layers.timezone);
+  }
+  
   // Update time text
   time_changed();
 }
@@ -701,6 +764,7 @@ void main_window_unload(Window *window) {
   if (view.layers.error) layer_destroy(view.layers.error);
   if (view.layers.weather) layer_destroy(view.layers.weather);
   if (view.layers.sunrise_sunset) layer_destroy(view.layers.sunrise_sunset);
+  if (view.layers.timezone) layer_destroy(view.layers.timezone);
   #if defined(PBL_HEALTH)
   if (view.layers.health) layer_destroy(view.layers.health);
   #endif
@@ -732,18 +796,21 @@ void view_init() {
   // Attach to model events
   model->on_error_change = error_changed;
   model->on_time_change = time_changed;
-  model->on_battery_change = battery_changed;
-  model->on_weather_temperature_change = weather_changed;
-  model->on_weather_condition_change = weather_changed;
-  model->on_sunrise_change = sunrise_sunset_changed;
-  model->on_sunset_change = sunrise_sunset_changed;
+  if (config->enable_battery) model->on_battery_change = battery_changed;
+  if (config->enable_weather) model->on_weather_temperature_change = weather_changed;
+  if (config->enable_weather) model->on_weather_condition_change = weather_changed;
+  if (config->enable_sun) model->on_sunrise_change = sunrise_sunset_changed;
+  if (config->enable_sun) model->on_sunset_change = sunrise_sunset_changed;
   #if defined(PBL_HEALTH)
   model->on_activity_change = activity_changed;
   #endif
   
   // Initialize some layers
   if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
-  battery_changed();
+  if (config->enable_battery) battery_changed();
+  #if defined(PBL_HEALTH)
+  activity_changed();
+  #endif
 }
 
 void view_deinit() {  

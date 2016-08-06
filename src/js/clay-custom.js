@@ -1,6 +1,6 @@
 module.exports = function(minified) {
   var clayConfig = this;
-
+  
   function resizeBatteryAccent() {
     // Resize the accent slider to match the from value
     var batteryShowFrom = clayConfig.getItemByMessageKey('cfgBatteryShowFrom');
@@ -53,6 +53,36 @@ module.exports = function(minified) {
   }
 
   clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function() {
+    // Enabling tidbits
+    var enableSection = clayConfig.getItemByMessageKey('cfgEnableBattery').$element[0].parentElement;
+    var enableCheckboxes = enableSection.querySelectorAll('input');
+    var i = 0;
+    var siblingSection = enableSection.nextElementSibling;
+    while (siblingSection.classList.contains('section')) {
+      var checkbox = enableCheckboxes[i];
+      
+      // Add event listener to each tidbit enable checkbox to hide the relevant tidbit section
+      checkbox.addEventListener('change', (function(section, chkbox) {
+        return function() {
+          if (chkbox.checked) {
+            section.classList.remove('hide');
+          } else {
+            section.classList.add('hide');
+          }
+        };
+      })(siblingSection, checkbox));
+      
+      // Initialize section visibility
+      if (checkbox.checked) {
+        siblingSection.classList.remove('hide');
+      } else {
+        siblingSection.classList.add('hide');
+      }
+      
+      ++i;
+      siblingSection = siblingSection.nextElementSibling;
+    }
+    
     // Battery show from
     if (clayConfig.getItemByMessageKey('cfgBatteryAccentFrom')) { // Only available on color platforms
       var batteryShowFrom = clayConfig.getItemByMessageKey('cfgBatteryShowFrom');
@@ -72,6 +102,6 @@ module.exports = function(minified) {
     // Constant location
     var phoneLocation = clayConfig.getItemByMessageKey('cfgWeatherLocPhone');
     showLonLat.call(phoneLocation);
-    phoneLocation.on('change', showLonLat);
+    phoneLocation.on('change', showLonLat);  
   });
 };

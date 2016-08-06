@@ -1,4 +1,4 @@
-var constants = require('./js/constants');
+var constants = require('./constants');
 
 module.exports = [
   {
@@ -7,7 +7,7 @@ module.exports = [
   }, 
   { 
     "type": "text", 
-    "defaultValue": "Press 'Save Settings' below to commit changes to your Pebble." 
+    "defaultValue": "Press 'Save Settings' at the bottom to commit changes to your Pebble." 
   },
   {
     "type": "section",
@@ -94,6 +94,63 @@ module.exports = [
     "items": [
       {
         "type": "heading",
+        "defaultValue": "Tidbits"
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "Select the tidbits of info to alternate between every minute." 
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableTimezone",
+        "label": "Alternative Time Zone",
+        "defaultValue": false
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableBattery",
+        "label": "Battery",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableError",
+        "label": "Error Messages",
+        "defaultValue": false
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableSun",
+        "label": "Sunset/Sunrise",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableWeather",
+        "label": "Weather",
+        "defaultValue": true
+      },
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Alternative Timezone"
+      },
+      {
+        "type": "timezone",
+        "messageKey": "cfgTimeZoneCity",
+        "defaultValue": "Europe/London"
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
         "defaultValue": "Battery"
       },
       {
@@ -115,6 +172,32 @@ module.exports = [
         "step": 10,
         "capabilities": ["COLOR"]
       },
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Error messages"
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "Error messages are shown for 15 sec on the watch anyway but enabling this repeats them every few minutes.",
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Sunset/Sunrise"
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "Sunset/sunrise is part of the weather refresh/location." 
+      }
     ]
   },
   {
@@ -244,19 +327,6 @@ module.exports = [
           "limit": 20
         }
       }
-    ]
-  },
-  {
-    "type": "section",
-    "items": [
-      {
-        "type": "heading",
-        "defaultValue": "Sunset/Sunrise"
-      },
-      { 
-        "type": "text", 
-        "defaultValue": "Sunset/sunrise is part of the weather refresh/location." 
-      },
     ]
   },
   {

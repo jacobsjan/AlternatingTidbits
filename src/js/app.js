@@ -5,12 +5,22 @@ try{
   // While these are necessary for the weather lookup to work in iOS, they brake the emulator
 }
 
-var MessageQueue = require('./js/libs/js-message-queue');
-var WeatherMan = require('./js/libs/weather-man');
-var logger = require('./js/logger');
-var constants = require('./js/constants');
-var customClay = require('./js/custom-clay');
+var MessageQueue = require('./libs/js-message-queue');
+var WeatherMan = require('./libs/weather-man');
+var constants = require('./constants');
+var customClay = require('./clay-custom');
 var keys = require('message_keys');
+
+function sendMessage(data) {
+  MessageQueue.sendAppMessage(data, ack, nack);
+}
+
+function calculateTimezoneOffset(timezone) {
+  var timezoneOffset = require('./timezoneOffset');
+  var altTimezoneOffset = timezoneOffset(timezone);
+  var localTimezoneOffset = new Date().getTimezoneOffset();
+  return localTimezoneOffset - altTimezoneOffset;
+}
 
 //localStorage.removeItem('clay-settings');
 // Initialize settings, don't know how to retrieve these neatly from clay
@@ -21,6 +31,7 @@ try {
     if (!settings) {
       // No clay settings found, initializing settings to defaults
       settings = {
+        "cfgEnableTimezone": false,
         "cfgTemperatureUnits": 'C',
         "cfgWeatherProvider": constants.YRNO,
         "cfgWeatherLocPhone": true
@@ -38,8 +49,9 @@ var Clay = require('pebble-clay');
 var clayConfig = require('./config');
 // Initialize Clay
 var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false } );
-clay.registerComponent(require('./js/masterkey-clay-component'));
-clay.registerComponent(require('./js/dateformat-clay-component'));
+clay.registerComponent(require('./clay-component-masterkey'));
+clay.registerComponent(require('./clay-component-dateformat'));
+clay.registerComponent(require('./clay-component-timezone'));
 
 Pebble.addEventListener('showConfiguration', function(e) {
   Pebble.openURL(clay.generateUrl());
@@ -55,7 +67,16 @@ Pebble.addEventListener('webviewclosed', function(e) {
   
   // Convert weather refresh to int
   dict[keys.cfgWeatherRefresh] = parseInt(dict[keys.cfgWeatherRefresh]);
-
+  
+  // Calculate alternative timezone offset
+  var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
+  dict[keys.cfgTimeZoneOffset] = timezoneOffset;
+  
+  // Determine alternative timezone offset based on timezone name
+  var split = dict[keys.cfgTimeZoneCity].split('/');
+  var city = split[split.length - 1].replace('_', ' ');
+  dict[keys.cfgTimeZoneCity] = city;
+  
   // Send settings values to watch side
   Pebble.sendAppMessage(dict, function(e) {
     console.log('Sent config data to Pebble');
@@ -83,17 +104,22 @@ function nack(e) {
 }
 
 Pebble.addEventListener('ready', function(e) {
-  // fetchLocation();
-  MessageQueue.sendAppMessage({
+  // Inform the watch that the phone is ready for communication
+  sendMessage({
     'JSReady': 0
-  }, ack, nack);
+  });
+  
+  // Recalculate the alternative timezone offset
+  if (settings.cfgEnableTimezone) {
+    sendMessage({
+      'cfgTimeZoneOffset': calculateTimezoneOffset(settings.cfgTimeZoneCity)
+    });
+  }
 });
 
 Pebble.addEventListener('appmessage', function(e) {
     console.log('Received message: ' + JSON.stringify(e.payload));
     if (e.payload.Fetch) {
-        logger.log(logger.FETCH_MESSAGE);
-
         fetchLocation();
     }
 });
@@ -105,8 +131,6 @@ function geoloc(latitude, longitude)
 }
 
 function fetchLocation() {
-    logger.log(logger.FETCH_LOCATION);
-
     if (!settings.cfgWeatherLocPhone) {
       // Retrieve location from settings
       var loc = new geoloc(settings.cfgWeatherLocLat, settings.cfgWeatherLocLong);
@@ -114,8 +138,6 @@ function fetchLocation() {
     } else {
       // Retrieve location from phone
       window.navigator.geolocation.getCurrentPosition(function(pos) { //Success
-        logger.log(logger.LOCATION_SUCCESS);
-    
         console.log('lat: ' + pos.coords.latitude);
         console.log('lng: ' + pos.coords.longitude);
     
@@ -123,14 +145,11 @@ function fetchLocation() {
         fetchWeather(loc);
     
       }, function(err) { //Error
-        logger.log(logger.LOCATION_ERROR);
-        logger.setLocationErrorCode(err.code);
-    
         console.warn('location error: ' + err.code + ' - ' + err.message);
     
-        MessageQueue.sendAppMessage({
+        sendMessage({
           'Err': constants.LOCATION_ERROR,
-        }, ack, nack);
+        });
     
       }, { //Options
         timeout: 30000, //30 seconds
@@ -140,8 +159,6 @@ function fetchLocation() {
 }
 
 function fetchWeather(loc) {
-    logger.log(logger.FETCH_WEATHER);
-
     var wm = null;
     if (settings.cfgWeatherProvider == constants.OPENWEATHERMAP && settings.cfgWeatherOWMKey && settings.cfgWeatherOWMKey.length > 0) {
         wm = new WeatherMan(WeatherMan.OPENWEATHERMAP, settings.cfgWeatherOWMKey);
@@ -158,8 +175,6 @@ function fetchWeather(loc) {
 
     if (wm) {
         wm.getCurrent(loc.latitude, loc.longitude).then(function(result) {
-            logger.log(logger.WEATHER_SUCCESS);
-
             var units = WeatherMan.KELVIN;
             if (settings.cfgTemperatureUnits == 'F') {
                 units = WeatherMan.FAHRENHEIT;
@@ -169,13 +184,6 @@ function fetchWeather(loc) {
             }
 
             var temp = result.getTemperature(units);
-            /*if (settings.feels_like == 1) {
-                temp = result.getWindChill(units);
-            }
-            else if (settings.feels_like == 2) {
-                temp = result.getHeatIndex(units);
-            }*/
-
             var condition = result.getCondition();
             var conditions = {};
             conditions[WeatherMan.CLEAR] = constants.CLEAR;
@@ -202,33 +210,23 @@ function fetchWeather(loc) {
             console.log('sunrise: ' + result.getSunriseFormatted());
             console.log('sunset: ' + result.getSunsetFormatted());
 
-            sendMessage(loc, {
+            sendMessage({
                 'Temperature': temp,
                 'Condition': cond,
                 'Sunrise': result.getSunrise(),
                 'Sunset': result.getSunset(),
             });
         }).catch(function(result) {
-            logger.log(logger.WEATHER_ERROR);
             console.warn('weather error: ' + JSON.stringify(result));
 
-            if (result && result.status) {
-                logger.setStatusCode(result.status);
-            }
-
-            sendMessage(loc, {
+            sendMessage({
                 'Err': constants.WEATHER_ERROR,
             });
         });
     }
     else {
-        sendMessage(loc, {
+        sendMessage({
             'Err': constants.WEATHER_ERROR,
         });
     }
-}
-
-
-function sendMessage(pos, data) {
-  MessageQueue.sendAppMessage(data, ack, nack);
 }

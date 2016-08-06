@@ -9,6 +9,8 @@ char* ICON_NO_LOCATION = "\uf1aa"; // location_off (Material design font)
 char* ICON_NO_WEATHER = "\uf21b"; // cloud_off (Material design font)
 char* ICON_FETCH_ERROR = "\uf03e"; // wi-cloud-refresh (Weather Icons)
 
+char* ICON_TIMEZONE = "\uf2a7"; 
+
 char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
 char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)
 

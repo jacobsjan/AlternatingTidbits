@@ -38,7 +38,14 @@
             "cfgDateFormatBottom",
             "cfgDateHoursLeadingZero",
             "cfgBatteryShowFrom",
-            "cfgBatteryAccentFrom"
+            "cfgBatteryAccentFrom",
+            "cfgTimeZoneCity",
+            "cfgTimeZoneOffset",
+            "cfgEnableTimezone",
+            "cfgEnableBattery",
+            "cfgEnableError",
+            "cfgEnableSun",
+            "cfgEnableWeather"
         ],
         "projectType": "native",
         "resources": {

@@ -63,24 +63,27 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   }
   
   // Weather
+  bool wtrChanged = false;    
   tuple = dict_find(iter, MESSAGE_KEY_Temperature);
-  if(tuple) {
+  if(tuple && (wtrChanged = true)) {
     model_set_weather_temperature(tuple->value->int32);
     
     // Weather fetch was succesfull, reset fetch countdown
     weather_fetch_countdown = config->weather_refresh;
   }
   tuple = dict_find(iter, MESSAGE_KEY_Condition);
-    if(tuple) model_set_weather_condition(tuple->value->int32);
+  if(tuple && (wtrChanged = true)) model_set_weather_condition(tuple->value->int32);
   tuple = dict_find(iter, MESSAGE_KEY_Sunrise);
-  if(tuple) model_set_sunrise(tuple->value->int32);
+  if(tuple && (wtrChanged = true)) model_set_sunrise(tuple->value->int32);
   tuple = dict_find(iter, MESSAGE_KEY_Sunset);
-  if(tuple) model_set_sunset(tuple->value->int32);
+  if(tuple && (wtrChanged = true)) model_set_sunset(tuple->value->int32);
+  
+  // Error
   tuple = dict_find(iter, MESSAGE_KEY_Err);
   if(tuple) {
     // Error encountered
     model_set_error(tuple->value->int32);
-  } else  {
+  } else if (wtrChanged) {
     // Reset error if necessary
     if (model->error != ERROR_NONE) {
       model_set_error(ERROR_NONE);
@@ -88,38 +91,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   } 
   
   // Configuration
-  bool cfgChanged = false;
-  tuple = dict_find(iter, MESSAGE_KEY_cfgColorBackground);
-  if(tuple && (cfgChanged = true)) config->color_background = GColorFromHEX(tuple->value->int32);
-  tuple = dict_find(iter, MESSAGE_KEY_cfgColorPrimary);
-  if(tuple && (cfgChanged = true)) {
-    config->color_primary = GColorFromHEX(tuple->value->int32);
-    #if defined(PBL_BW)
-    config->color_secondary = config->color_primary;
-    config->color_accent = config->color_primary;
-    #endif
-  }
-  #if !defined(PBL_BW)
-  tuple = dict_find(iter, MESSAGE_KEY_cfgColorSecondary);
-  if(tuple && (cfgChanged = true)) config->color_secondary = GColorFromHEX(tuple->value->int32);
-  tuple = dict_find(iter, MESSAGE_KEY_cfgColorAccent);
-  if(tuple && (cfgChanged = true)) config->color_accent = GColorFromHEX(tuple->value->int32); 
-  #endif
-  tuple = dict_find(iter, MESSAGE_KEY_cfgWeatherRefresh);
-  if(tuple && (cfgChanged = true)) config->weather_refresh = tuple->value->int32;
-  tuple = dict_find(iter, MESSAGE_KEY_cfgDateHoursLeadingZero);
-  if(tuple && (cfgChanged = true)) config->date_hours_leading_zero = tuple->value->int8; 
-  tuple = dict_find(iter, MESSAGE_KEY_cfgDateFormatTop);
-  if(tuple && (cfgChanged = true)) strncpy(config->date_format_top, tuple->value->cstring, sizeof(config->date_format_top)); 
-  tuple = dict_find(iter, MESSAGE_KEY_cfgDateFormatBottom);
-  if(tuple && (cfgChanged = true)) strncpy(config->date_format_bottom, tuple->value->cstring, sizeof(config->date_format_bottom)); 
-  tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryShowFrom);
-  if(tuple && (cfgChanged = true)) config->battery_show_from = tuple->value->int32; 
-  #if !defined(PBL_BW)
-  tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryAccentFrom);
-  if(tuple && (cfgChanged = true)) config->battery_accent_from = tuple->value->int32; 
-  #endif
-    
+  bool cfgChanged = parse_configuration_messages(iter);    
   if (cfgChanged) {
     // Hidden function to clear crash detection history
     if (gcolor_equal(config->color_background, GColorWhite) && gcolor_equal(config->color_primary, GColorWhite)) {
