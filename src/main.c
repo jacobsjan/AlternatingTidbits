@@ -116,7 +116,7 @@ void update_health() {
   const int STEPS_PER_MINUTE_RUNNING = 110;
   
   // Fill the activity buffer for this minute
-  activity_buffer[activity_buffer_index].totalCalories = (int)health_service_sum_today(HealthMetricActiveKCalories) + (int)health_service_sum_today(HealthMetricRestingKCalories);;
+  activity_buffer[activity_buffer_index].totalCalories = (int)health_service_sum_today(HealthMetricActiveKCalories);
   activity_buffer[activity_buffer_index].totalDistance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters);
   activity_buffer[activity_buffer_index].totalStepCount = (int)health_service_sum_today(HealthMetricStepCount);
   activity_buffer[activity_buffer_index].time = time(NULL);

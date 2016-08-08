@@ -268,27 +268,27 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
           },
           { 
-            "label": "Total calories", 
+            "label": "Calories today", 
             "value": constants.TODAY_CALORIES 
           },
           { 
-            "label": "Total distance", 
+            "label": "Distance today", 
             "value": constants.TODAY_DISTANCE 
           },
           { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           }
         ]
@@ -316,27 +316,27 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
           },
           { 
-            "label": "Total calories", 
+            "label": "Calories today", 
             "value": constants.TODAY_CALORIES 
           },
           { 
-            "label": "Total distance", 
+            "label": "Distance today", 
             "value": constants.TODAY_DISTANCE 
           },
           { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           }
         ]
@@ -364,27 +364,27 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
           },
           { 
-            "label": "Total calories", 
+            "label": "Calories today", 
             "value": constants.TODAY_CALORIES 
           },
           { 
-            "label": "Total distance", 
+            "label": "Distance today", 
             "value": constants.TODAY_DISTANCE 
           },
           { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           }
         ]
@@ -417,27 +417,27 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
           },
           { 
-            "label": "Total calories", 
+            "label": "Calories today", 
             "value": constants.TODAY_CALORIES 
           },
           { 
-            "label": "Total distance", 
+            "label": "Distance today", 
             "value": constants.TODAY_DISTANCE 
           },
           { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           },
           { 
@@ -489,27 +489,27 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
           },
           { 
-            "label": "Total calories", 
+            "label": "Calories today", 
             "value": constants.TODAY_CALORIES 
           },
           { 
-            "label": "Total distance", 
+            "label": "Distance today", 
             "value": constants.TODAY_DISTANCE 
           },
           { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           },
           { 
@@ -561,27 +561,27 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
           },
           { 
-            "label": "Total calories", 
+            "label": "Calories today", 
             "value": constants.TODAY_CALORIES 
           },
           { 
-            "label": "Total distance", 
+            "label": "Distance today", 
             "value": constants.TODAY_DISTANCE 
           },
           { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           },
           { 
@@ -638,16 +638,24 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Calories today", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Distance today", 
+            "value": constants.TODAY_DISTANCE 
           },
           { 
             "label": "Run calories", 
@@ -674,15 +682,7 @@ module.exports = [
             "value": constants.ACTIVITY_STEPS 
           },
           { 
-            "label": "Total calories", 
-            "value": constants.TODAY_CALORIES 
-          },
-          { 
-            "label": "Total distance", 
-            "value": constants.TODAY_DISTANCE 
-          },
-          { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           }
         ]
@@ -710,16 +710,24 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Calories today", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Distance today", 
+            "value": constants.TODAY_DISTANCE 
           },
           { 
             "label": "Run calories", 
@@ -746,15 +754,7 @@ module.exports = [
             "value": constants.ACTIVITY_STEPS 
           },
           { 
-            "label": "Total calories", 
-            "value": constants.TODAY_CALORIES 
-          },
-          { 
-            "label": "Total distance", 
-            "value": constants.TODAY_DISTANCE 
-          },
-          { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           }
         ]
@@ -782,16 +782,24 @@ module.exports = [
             "value": constants.AVG_STEPS_TILL_NOW 
           },
           { 
-            "label": "Avg. total calories", 
+            "label": "Avg. daily calories ", 
             "value": constants.AVG_TOTAL_CALORIES 
           },
           { 
-            "label": "Avg. total distance", 
+            "label": "Avg. daily distance", 
             "value": constants.AVG_TOTAL_DISTANCE 
           },
           { 
-            "label": "Avg. total steps", 
+            "label": "Avg. daily steps", 
             "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Calories today", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Distance today", 
+            "value": constants.TODAY_DISTANCE 
           },
           { 
             "label": "Run calories", 
@@ -818,15 +826,7 @@ module.exports = [
             "value": constants.ACTIVITY_STEPS 
           },
           { 
-            "label": "Total calories", 
-            "value": constants.TODAY_CALORIES 
-          },
-          { 
-            "label": "Total distance", 
-            "value": constants.TODAY_DISTANCE 
-          },
-          { 
-            "label": "Total steps", 
+            "label": "Steps today", 
             "value": constants.TODAY_STEPS 
           }
         ]
@@ -847,19 +847,19 @@ module.exports = [
             "value": constants.EMPTY
           },
           { 
-            "label": "Avg. total deep sleep", 
+            "label": "Avg. daily deep sleep", 
             "value": constants.AVG_TIME_DEEP_SLEEP 
           },
           { 
-            "label": "Avg. total sleep", 
+            "label": "Avg. daily sleep", 
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
-            "label": "Time deep sleep", 
+            "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
           { 
-            "label": "Total time slept", 
+            "label": "Sleep today", 
             "value": constants.TIME_TOTAL_SLEEP 
           }
         ]
@@ -875,19 +875,19 @@ module.exports = [
             "value": constants.EMPTY
           },
           { 
-            "label": "Avg. total deep sleep", 
+            "label": "Avg. daily deep sleep", 
             "value": constants.AVG_TIME_DEEP_SLEEP 
           },
           { 
-            "label": "Avg. total sleep", 
+            "label": "Avg. daily sleep", 
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
-            "label": "Time deep sleep", 
+            "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
           { 
-            "label": "Total time slept", 
+            "label": "Sleep today", 
             "value": constants.TIME_TOTAL_SLEEP 
           }
         ]
@@ -903,19 +903,19 @@ module.exports = [
             "value": constants.EMPTY
           },
           { 
-            "label": "Avg. total deep sleep", 
+            "label": "Avg. daily deep sleep", 
             "value": constants.AVG_TIME_DEEP_SLEEP 
           },
           { 
-            "label": "Avg. total sleep", 
+            "label": "Avg. daily sleep", 
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
-            "label": "Time deep sleep", 
+            "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
           { 
-            "label": "Total time slept", 
+            "label": "Sleep today", 
             "value": constants.TIME_TOTAL_SLEEP 
           }
         ]
