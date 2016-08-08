@@ -214,7 +214,7 @@ void weather_update_proc(Layer *layer, GContext *ctx) {
   snprintf(temperature, sizeof(temperature), "%d", model->weather_temperature);
   
   // Draw
-  char *texts[] = { " ", "", temperature, "\u00b0"}; // Degree symbol
+  char *texts[] = { " ", NULL, temperature, "\u00b0"}; // Degree symbol
   draw_centered(layer, ctx, condition, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
@@ -227,7 +227,7 @@ void sunrise_sunset_update_proc(Layer *layer, GContext *ctx) {
   snprintf(minute, sizeof(minute), "%02d", (daytime ? model->sunset : model->sunrise) % 60);
   
   // Draw
-  char *texts[] = { " ", "", hour, ":", minute}; 
+  char *texts[] = { " ", NULL, hour, ":", minute}; 
   draw_centered(layer, ctx, symbol, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
@@ -478,7 +478,7 @@ void date_update_proc(Layer *layer, GContext *ctx, char* format) {
     if ((element >= 'a' && element <= 'z') || (element >= 'A' && element <= 'Z')) {
       // Date element
       normalText = (char*)malloc(12 * sizeof(char));
-      accentText = (char*)malloc(1 * sizeof(char));
+      accentText = NULL;
       char strfmt[] = "%x";
       strfmt[1] = element;
       strftime(normalText, 12, strfmt, model->time);
@@ -488,12 +488,10 @@ void date_update_proc(Layer *layer, GContext *ctx, char* format) {
         normalText[0] = normalText[1];
         normalText[1] = normalText[2];
       }
-      accentText[0] = 0;
     } else {
       // Separartor element
-      normalText = (char*)malloc(1 * sizeof(char));
+      normalText = NULL;
       accentText = (char*)malloc(2 * sizeof(char));
-      normalText[0] = 0;
       accentText[0] = element;
       accentText[1] = 0;
     }
