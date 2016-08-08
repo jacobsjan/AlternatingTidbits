@@ -49,9 +49,9 @@ char* icons_get_battery_symbol(uint8_t charge, bool charging, bool plugged) {
   if (plugged) {
     if(charge >= 70) {
       return "\uf0aa";
-    } else if(charge >= 50) {
-      return "\uf0b0";
     } else if(charge >= 60) {
+      return "\uf0b0";
+    } else if(charge >= 50) {
       return "\uf0af";
     } else if(charge >= 40) {
       return "\uf0ae";

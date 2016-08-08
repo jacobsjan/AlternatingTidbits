@@ -8,7 +8,6 @@ try{
 var MessageQueue = require('./libs/js-message-queue');
 var WeatherMan = require('./libs/weather-man');
 var constants = require('./constants');
-var customClay = require('./clay-custom');
 var keys = require('message_keys');
 
 function sendMessage(data) {
@@ -43,10 +42,10 @@ try {
 
 
 // Make the watchface configurable using Clay
-// Import the Clay package
 var Clay = require('pebble-clay');
 // Load our Clay configuration file
 var clayConfig = require('./config');
+var customClay = require('./clay-custom');
 // Initialize Clay
 var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false } );
 clay.registerComponent(require('./clay-component-masterkey'));
