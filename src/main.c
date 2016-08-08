@@ -148,7 +148,7 @@ void update_health() {
   } else if (avg_steps_per_minute >= STEPS_PER_MINUTE_WALKING) {
     current_activity = ACTIVITY_WALK;
   } else {
-    current_activity = ACTIVITY_CALM;
+    current_activity = ACTIVITY_NORMAL;
   }
   
   if (current_activity != model->activity || activity_start.time == 0) {

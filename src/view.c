@@ -244,7 +244,7 @@ void battery_update_proc(Layer *layer, GContext *ctx) {
 
 #if defined(PBL_HEALTH)
 char* alloc_print_d(char* fmt, int i) {
-  int size = snprintf(null, 0, fmt, i);
+  int size = snprintf(NULL, 0, fmt, i);
   char* result = (char*)malloc((size + 1) * sizeof(char));
   snprintf(result, size + 1, fmt, i);
   return result;
@@ -257,26 +257,28 @@ char* alloc_print_s(char* s) {
 }
 
 char** health_generate_texts(enum HealthIndicator indicator) {
-  // Return null for empty indicators
-  if (indicator == HEALTH_EMPTY) return null;
-  
   char** result = (char**)malloc(4 * sizeof(char*));
   int metric = -1;
+  int distance;
   switch (indicator) {
-    HEALTH_AVG_CALORIES_TILL_NOW:
-      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricRestingKCalories, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly) + (int)health_service_sum_averaged(HealthMetricActiveKCalories, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly);
-    HEALTH_AVG_TOTAL_CALORIES:
+    case HEALTH_EMPTY:
+      free(result);
+      result = NULL;    
+      break;
+    case HEALTH_AVG_CALORIES_TILL_NOW:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricRestingKCalories, time_start_of_today(), time(NULL), HealthServiceTimeScopeWeekly) + (int)health_service_sum_averaged(HealthMetricActiveKCalories, time_start_of_today(), time(NULL), HealthServiceTimeScopeWeekly);
+    case HEALTH_AVG_TOTAL_CALORIES:
       if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricRestingKCalories, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly) + (int)health_service_sum_averaged(HealthMetricActiveKCalories, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
-    HEALTH_TODAY_CALORIES:
+    case HEALTH_TODAY_CALORIES:
       if (metric < 0) metric = (int)health_service_sum_today(HealthMetricRestingKCalories) + (int)health_service_sum_today(HealthMetricActiveKCalories);
-    HEALTH_ACTIVITY_CALORIES:
+    case HEALTH_ACTIVITY_CALORIES:
       if (metric < 0) metric = model->activity_calories;
   
       if (metric < 1000) {
         result[0] = alloc_print_d("%d", metric);
         result[1] = alloc_print_s("kcal");
-        result[2] = null;
-        result[3] = null;
+        result[2] = NULL;
+        result[3] = NULL;
       } else {
         result[0] = alloc_print_d("%d", metric / 1000);
         result[1] = alloc_print_s(config->health_number_format == 'M' ? "." : ",");
@@ -284,20 +286,20 @@ char** health_generate_texts(enum HealthIndicator indicator) {
         result[3] = alloc_print_s("kcal");
       }     
       break;
-    HEALTH_AVG_DISTANCE_TILL_NOW:
-      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricWalkedDistanceMeters, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly);
-    HEALTH_AVG_TOTAL_DISTANCE:
+    case HEALTH_AVG_DISTANCE_TILL_NOW:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricWalkedDistanceMeters, time_start_of_today(), time(NULL), HealthServiceTimeScopeWeekly);
+    case HEALTH_AVG_TOTAL_DISTANCE:
       if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricWalkedDistanceMeters, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
-    HEALTH_TODAY_DISTANCE:
+    case HEALTH_TODAY_DISTANCE:
       if (metric < 0) metric = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters);
-    HEALTH_ACTIVITY_DISTANCE:
+    case HEALTH_ACTIVITY_DISTANCE:
       if (metric < 0) metric = model->activity_distance;
   
       if (metric < 1000 && config->health_distance_unit == 'M') {
         result[0] = alloc_print_d("%d", metric);
         result[1] = alloc_print_s("m");
-        result[2] = null;
-        result[3] = null;
+        result[2] = NULL;
+        result[3] = NULL;
       } else {
         if (config->health_distance_unit == 'I') metric = (metric * 1000) / 1609;
         result[0] = alloc_print_d("%d", (metric + 50) / 1000);
@@ -306,54 +308,54 @@ char** health_generate_texts(enum HealthIndicator indicator) {
         result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "km" : "mi");
       }      
       break;
-    HEALTH_AVG_STEPS_TILL_NOW:
-      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricStepCount, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly);
-    HEALTH_AVG_TOTAL_STEPS:
+    case HEALTH_AVG_STEPS_TILL_NOW:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricStepCount, time_start_of_today(), time(NULL), HealthServiceTimeScopeWeekly);
+    case HEALTH_AVG_TOTAL_STEPS:
       if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricStepCount, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
-    HEALTH_TODAY_STEPS:
+    case HEALTH_TODAY_STEPS:
       if (metric < 0) metric = (int)health_service_sum_today(HealthMetricStepCount);
-    HEALTH_ACTIVITY_STEPS:
-      if (metric < 0) metric = model->activity_total_step_count;
+    case HEALTH_ACTIVITY_STEPS:
+      if (metric < 0) metric = model->activity_step_count;
   
       if (metric < 1000) {
         result[0] = alloc_print_d("%d", metric);
-        result[1] = null;
-        result[2] = null;
-        result[3] = null;
+        result[1] = NULL;
+        result[2] = NULL;
+        result[3] = NULL;
       } else {
         result[0] = alloc_print_d("%d", metric / 1000);
         result[1] = alloc_print_s(config->health_number_format == 'M' ? "." : ",");
         result[2] = alloc_print_d("%03d", metric % 1000);
-        result[3] = null;
+        result[3] = NULL;
       }     
       break;
-    HEALTH_AVG_TIME_DEEP_SLEEP:
+    case HEALTH_AVG_TIME_DEEP_SLEEP:
       if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricSleepRestfulSeconds, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
-    HEALTH_AVG_TIME_TOTAL_SLEEP:
+    case HEALTH_AVG_TIME_TOTAL_SLEEP:
       if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricSleepSeconds, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
-    HEALTH_TIME_DEEP_SLEEP:
+    case HEALTH_TIME_DEEP_SLEEP:
       if (metric < 0) metric = (int)health_service_sum_today(HealthMetricSleepRestfulSeconds) / SECONDS_PER_MINUTE;
-    HEALTH_TIME_TOTAL_SLEEP:
+    case HEALTH_TIME_TOTAL_SLEEP:
       if (metric < 0) metric = (int)health_service_sum_today(HealthMetricSleepSeconds) / SECONDS_PER_MINUTE;
-    HEALTH_ACTIVITY_DURATION:
+    case HEALTH_ACTIVITY_DURATION:
       if (metric < 0) metric = model->activity_duration;
       
       result[0] = alloc_print_d("%d", metric / 60);
       result[1] = alloc_print_s(":");
       result[2] = alloc_print_d("%02d", metric % 60);
-      result[3] = null;
+      result[3] = NULL;
       break;
-    HEALTH_ACTIVITY_PACE:
-      int distance = config->health_distance_unit == 'M' ? model->activity_distance : (model->activity_distance * 1000) / 1609;
+    case HEALTH_ACTIVITY_PACE:
+      distance = config->health_distance_unit == 'M' ? model->activity_distance : (model->activity_distance * 1000) / 1609;
       int sec_per_dist = (model->activity_duration * 60 * 1000) / distance;
       
       result[0] = alloc_print_d("%d", sec_per_dist / 60);
-      result[1] = alloc_print_s(":");
+      result[1] = alloc_print_s("m");
       result[2] = alloc_print_d("%02d", sec_per_dist % 60);
-      result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "/km" : "/mi");
+      result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "s/km" : "s/mi");
       break;
-    HEALTH_ACTIVITY_SPEED:
-      int distance = config->health_distance_unit == 'M' ? model->activity_distance : (model->activity_distance * 1000) / 1609;
+    case HEALTH_ACTIVITY_SPEED:
+      distance = config->health_distance_unit == 'M' ? model->activity_distance : (model->activity_distance * 1000) / 1609;
       int dist_per_hour = (distance * 60) / model->activity_duration;
     
       result[0] = alloc_print_d("%d", (dist_per_hour + 50) / 1000);
@@ -394,7 +396,7 @@ void health_update_proc(Layer *layer, GContext *ctx) {
       bottom_texts = health_generate_texts(config->health_sleep_bottom);
       break;
     
-    case ACTIVITY_CALM:
+    case ACTIVITY_NORMAL:
     default:
       health_icon = ICON_STEP;
       top_texts = health_generate_texts(config->health_normal_top);
@@ -779,12 +781,12 @@ void activity_changed() {
   }
   
   // Suspend alternating when walking, running or sleeping
-  if (model->activity == ACTIVITY_CALM) {
-    // Stop suspending alternating layers
-    view.suspension_reason &= ~SUSPENSION_ACTIVITY;
-  } else {
-    // Suspend alternating layers and show health layer
-    if (config->health_stick) {
+  if (config->health_stick) {
+      if (model->activity == ACTIVITY_NORMAL) {
+      // Stop suspending alternating layers
+      view.suspension_reason &= ~SUSPENSION_ACTIVITY;
+    } else {
+      // Suspend alternating layers and show health layer
       view.suspension_reason |= SUSPENSION_ACTIVITY;
       alternating_layers_show_layer(view.layers.health);
     }

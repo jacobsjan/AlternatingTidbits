@@ -30,7 +30,7 @@ enum ErrorCodes {
 };
 
 enum Activities {
-  ACTIVITY_CALM = 0,
+  ACTIVITY_NORMAL = 0,
   ACTIVITY_WALK,
   ACTIVITY_RUN,
   ACTIVITY_SLEEP,
