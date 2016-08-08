@@ -78,10 +78,11 @@ void model_set_activity(enum Activities activity) {
   }
 }
 
-void model_set_activity_counters(int total_step_count, int duration, int distance) {
-  model->activity_total_step_count = total_step_count;
+void model_set_activity_counters(int calories, int duration, int distance, int step_count) {
+  model->activity_calories = calories;
   model->activity_duration = duration;
   model->activity_distance = distance;
+  model->activity_step_count = step_count;
     
   if (model->events.on_activity_counters_change) {
     model->events.on_activity_counters_change();

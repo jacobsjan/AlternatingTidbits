@@ -42,6 +42,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->enable_battery = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableError);
   if(tuple && (cfgChanged = true)) config->enable_error = tuple->value->int8;
+  #if defined(PBL_HEALTH) 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHealth);
+  if(tuple && (cfgChanged = true)) config->enable_health = tuple->value->int8;
+  #endif
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableSun);
   if(tuple && (cfgChanged = true)) config->enable_sun = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableWeather);
@@ -59,6 +63,41 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   #if !defined(PBL_BW)
   tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryAccentFrom);
   if(tuple && (cfgChanged = true)) config->battery_accent_from = tuple->value->int32; 
+  #endif 
+  
+  // Health
+  #if defined(PBL_HEALTH)
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthStick);
+  if(tuple && (cfgChanged = true)) config->health_stick = tuple->value->int8; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthUnits);
+  if(tuple && (cfgChanged = true)) config->health_distance_unit = tuple->value->cstring[0]; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNumbers);
+  if(tuple && (cfgChanged = true)) config->health_number_format = tuple->value->cstring[0]; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNormalLine1);
+  if(tuple && (cfgChanged = true)) config->health_normal_top = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNormalLine2);
+  if(tuple && (cfgChanged = true)) config->health_normal_middle = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNormalLine3);
+  if(tuple && (cfgChanged = true)) config->health_normal_bottom = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthWalkLine1);
+  if(tuple && (cfgChanged = true)) config->health_walk_top = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthWalkLine2);
+  if(tuple && (cfgChanged = true)) config->health_walk_middle = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthWalkLine3);
+  if(tuple && (cfgChanged = true)) config->health_walk_bottom = tuple->value->int32;
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthRunLine1);
+  if(tuple && (cfgChanged = true)) config->health_run_top = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthRunLine2);
+  if(tuple && (cfgChanged = true)) config->health_run_middle = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthRunLine3);
+  if(tuple && (cfgChanged = true)) config->health_run_bottom = tuple->value->int32;
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthSleepLine1);
+  if(tuple && (cfgChanged = true)) config->health_sleep_top = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthSleepLine2);
+  if(tuple && (cfgChanged = true)) config->health_sleep_middle = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthSleepLine3);
+  if(tuple && (cfgChanged = true)) config->health_sleep_bottom = tuple->value->int32;
+  
   #endif 
   
   // Weather
@@ -86,11 +125,32 @@ void config_init() {
     config->enable_timezone = false;
     config->enable_battery = true;
     config->enable_error = false;
+    #if defined(PBL_HEALTH)
+    config->enable_health = true;
+    #endif
     config->enable_sun = true;
     config->enable_weather = true;
     
     config->battery_show_from = 100;
     config->battery_accent_from = 30;
+      
+    #if defined(PBL_HEALTH)
+    config->health_stick = true;
+    config->health_distance_unit = 'M';
+    config->health_number_format = 'M';
+    config->health_normal_top = HEALTH_EMPTY;
+    config->health_normal_middle = HEALTH_EMPTY;
+    config->health_normal_bottom = HEALTH_TODAY_STEPS;
+    config->health_walk_top = HEALTH_EMPTY;
+    config->health_walk_middle = HEALTH_ACTIVITY_DISTANCE;
+    config->health_walk_bottom = HEALTH_TODAY_STEPS;
+    config->health_run_top = HEALTH_ACTIVITY_DURATION;
+    config->health_run_middle = HEALTH_ACTIVITY_DISTANCE;
+    config->health_run_bottom = HEALTH_ACTIVITY_SPEED;
+    config->health_sleep_top = HEALTH_EMPTY;
+    config->health_sleep_middle = HEALTH_EMPTY;
+    config->health_sleep_bottom = HEALTH_TIME_TOTAL_SLEEP;
+    #endif
     
     config->weather_refresh = 30; 
   }

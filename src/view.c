@@ -75,9 +75,11 @@ GSize calculate_total_size(GRect bounds, int text_count, char *texts[]) {
   GSize result = GSize(0, 0);
   
   for (int i = 0; i < text_count; ++i) {
-    GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
-    result.w += text_size.w;
-    result.h = text_size.h > result.h ? text_size.h : result.h;
+    if (texts[i]) {
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      result.w += text_size.w;
+      result.h = text_size.h > result.h ? text_size.h : result.h;
+    }
   } 
   
   return result;
@@ -85,14 +87,16 @@ GSize calculate_total_size(GRect bounds, int text_count, char *texts[]) {
 
 void draw_alternating_text(GContext *ctx, GRect bounds, int text_count, char *texts[]) {
   for (int i = 0; i < text_count; ++i) {
-    // Draw the text
-    graphics_context_set_text_color(ctx, i % 2 == 0 ? config->color_secondary : config->color_accent); // Alternate color
-    graphics_draw_text(ctx, texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-    
-    // Shrink bounds to the right
-    GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
-    bounds.origin.x += text_size.w;
-    bounds.size.w -= text_size.w;
+    if (texts[i]) {
+      // Draw the text
+      graphics_context_set_text_color(ctx, i % 2 == 0 ? config->color_secondary : config->color_accent); // Alternate color
+      graphics_draw_text(ctx, texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+      
+      // Shrink bounds to the right
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      bounds.origin.x += text_size.w;
+      bounds.size.w -= text_size.w;
+    }
   }
 }
 
@@ -239,98 +243,169 @@ void battery_update_proc(Layer *layer, GContext *ctx) {
 }
 
 #if defined(PBL_HEALTH)
-char** health_distance_texts() {
-  static char before_point[5];
-  static char after_point[2];
-  
-  if (model->activity_distance < 1000) {
-    snprintf(before_point, sizeof(before_point), "%d", model->activity_distance);    
-    static char* texts[] = { before_point, "m", "", "" };
-    return texts;
-  } else {
-    snprintf(before_point, sizeof(before_point), "%d", (model->activity_distance + 50) / 1000);
-    snprintf(after_point, sizeof(after_point), "%d", ((model->activity_distance + 50) % 1000) / 100);
-    static char* texts[] = { before_point, ",", after_point, "km" };
-    return texts;
-  }  
+char* alloc_print_d(char* fmt, int i) {
+  int size = snprintf(null, 0, fmt, i);
+  char* result = (char*)malloc((size + 1) * sizeof(char));
+  snprintf(result, size + 1, fmt, i);
+  return result;
 }
 
-char** health_activity_duration_texts() {
-  static char before_point[4];  
-  static char after_point[3];
-  
-  snprintf(before_point, sizeof(before_point), "%d", model->activity_duration / 60);
-  snprintf(after_point, sizeof(after_point), "%02d", model->activity_duration % 60);
-  static char* texts[] = { before_point, ":", after_point, "" };
-  return texts;
+char* alloc_print_s(char* s) {
+  int size = strlen(s);
+  char* result = (char*)malloc((size + 1) * sizeof(char));
+  return strncpy(result, s, size + 1);
 }
 
-char** health_activity_speed_texts() {
-  static char before_point[4];  
-  static char after_point[2];
+char** health_generate_texts(enum HealthIndicator indicator) {
+  // Return null for empty indicators
+  if (indicator == HEALTH_EMPTY) return null;
   
-  int m_per_hour = (model->activity_distance * 60) / model->activity_duration;
-  snprintf(before_point, sizeof(before_point), "%d", (m_per_hour + 50) / 1000);
-  snprintf(after_point, sizeof(after_point), "%d", ((m_per_hour + 50) % 1000) / 100);
-  static char* texts[] = { before_point, ",", after_point, "km/h" };
-  return texts;
-}
-
-char** health_total_steps_texts() {
-  static char before_point[5];  
-  static char after_point[4];
+  char** result = (char**)malloc(4 * sizeof(char*));
+  int metric = -1;
+  switch (indicator) {
+    HEALTH_AVG_CALORIES_TILL_NOW:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricRestingKCalories, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly) + (int)health_service_sum_averaged(HealthMetricActiveKCalories, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly);
+    HEALTH_AVG_TOTAL_CALORIES:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricRestingKCalories, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly) + (int)health_service_sum_averaged(HealthMetricActiveKCalories, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
+    HEALTH_TODAY_CALORIES:
+      if (metric < 0) metric = (int)health_service_sum_today(HealthMetricRestingKCalories) + (int)health_service_sum_today(HealthMetricActiveKCalories);
+    HEALTH_ACTIVITY_CALORIES:
+      if (metric < 0) metric = model->activity_calories;
   
-  if (model->activity_total_step_count < 1000) {
-    snprintf(before_point, sizeof(before_point), "%d", model->activity_total_step_count);
-    static char* texts[] = { before_point, "", "", "" };
-    return texts;
-  } else {
-    snprintf(before_point, sizeof(before_point), "%d", model->activity_total_step_count / 1000);
-    snprintf(after_point, sizeof(after_point), "%03d", model->activity_total_step_count % 1000);
-    static char* texts[] = { before_point, ".", after_point, "" };
-    return texts;
-  }  
+      if (metric < 1000) {
+        result[0] = alloc_print_d("%d", metric);
+        result[1] = alloc_print_s("kcal");
+        result[2] = null;
+        result[3] = null;
+      } else {
+        result[0] = alloc_print_d("%d", metric / 1000);
+        result[1] = alloc_print_s(config->health_number_format == 'M' ? "." : ",");
+        result[2] = alloc_print_d("%03d", metric % 1000);
+        result[3] = alloc_print_s("kcal");
+      }     
+      break;
+    HEALTH_AVG_DISTANCE_TILL_NOW:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricWalkedDistanceMeters, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly);
+    HEALTH_AVG_TOTAL_DISTANCE:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricWalkedDistanceMeters, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
+    HEALTH_TODAY_DISTANCE:
+      if (metric < 0) metric = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters);
+    HEALTH_ACTIVITY_DISTANCE:
+      if (metric < 0) metric = model->activity_distance;
+  
+      if (metric < 1000 && config->health_distance_unit == 'M') {
+        result[0] = alloc_print_d("%d", metric);
+        result[1] = alloc_print_s("m");
+        result[2] = null;
+        result[3] = null;
+      } else {
+        if (config->health_distance_unit == 'I') metric = (metric * 1000) / 1609;
+        result[0] = alloc_print_d("%d", (metric + 50) / 1000);
+        result[1] = alloc_print_s(config->health_number_format == 'M' ? "," : ".");
+        result[2] = alloc_print_d("%d", ((metric + 50) % 1000) / 100); 
+        result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "km" : "mi");
+      }      
+      break;
+    HEALTH_AVG_STEPS_TILL_NOW:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricStepCount, time_start_of_today(), time(null), HealthServiceTimeScopeWeekly);
+    HEALTH_AVG_TOTAL_STEPS:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricStepCount, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
+    HEALTH_TODAY_STEPS:
+      if (metric < 0) metric = (int)health_service_sum_today(HealthMetricStepCount);
+    HEALTH_ACTIVITY_STEPS:
+      if (metric < 0) metric = model->activity_total_step_count;
+  
+      if (metric < 1000) {
+        result[0] = alloc_print_d("%d", metric);
+        result[1] = null;
+        result[2] = null;
+        result[3] = null;
+      } else {
+        result[0] = alloc_print_d("%d", metric / 1000);
+        result[1] = alloc_print_s(config->health_number_format == 'M' ? "." : ",");
+        result[2] = alloc_print_d("%03d", metric % 1000);
+        result[3] = null;
+      }     
+      break;
+    HEALTH_AVG_TIME_DEEP_SLEEP:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricSleepRestfulSeconds, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
+    HEALTH_AVG_TIME_TOTAL_SLEEP:
+      if (metric < 0) metric = (int)health_service_sum_averaged(HealthMetricSleepSeconds, time_start_of_today(), time_start_of_today() + SECONDS_PER_DAY, HealthServiceTimeScopeWeekly);
+    HEALTH_TIME_DEEP_SLEEP:
+      if (metric < 0) metric = (int)health_service_sum_today(HealthMetricSleepRestfulSeconds) / SECONDS_PER_MINUTE;
+    HEALTH_TIME_TOTAL_SLEEP:
+      if (metric < 0) metric = (int)health_service_sum_today(HealthMetricSleepSeconds) / SECONDS_PER_MINUTE;
+    HEALTH_ACTIVITY_DURATION:
+      if (metric < 0) metric = model->activity_duration;
+      
+      result[0] = alloc_print_d("%d", metric / 60);
+      result[1] = alloc_print_s(":");
+      result[2] = alloc_print_d("%02d", metric % 60);
+      result[3] = null;
+      break;
+    HEALTH_ACTIVITY_PACE:
+      int distance = config->health_distance_unit == 'M' ? model->activity_distance : (model->activity_distance * 1000) / 1609;
+      int sec_per_dist = (model->activity_duration * 60 * 1000) / distance;
+      
+      result[0] = alloc_print_d("%d", sec_per_dist / 60);
+      result[1] = alloc_print_s(":");
+      result[2] = alloc_print_d("%02d", sec_per_dist % 60);
+      result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "/km" : "/mi");
+      break;
+    HEALTH_ACTIVITY_SPEED:
+      int distance = config->health_distance_unit == 'M' ? model->activity_distance : (model->activity_distance * 1000) / 1609;
+      int dist_per_hour = (distance * 60) / model->activity_duration;
+    
+      result[0] = alloc_print_d("%d", (dist_per_hour + 50) / 1000);
+      result[1] = alloc_print_s(config->health_number_format == 'M' ? "," : ".");
+      result[2] = alloc_print_d("%d", ((dist_per_hour + 50) % 1000) / 100);
+      result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "km/h" : "mi/h");
+      break;
+  }
+  return result;
 }
 
 void health_update_proc(Layer *layer, GContext *ctx) {
   const int SEPARATOR = 4;
-  const char* health_icon;
-  
+  const char* health_icon;  
   char** bottom_texts;
-  int bottom_text_count = 4;
-  char** middle_texts = NULL;
-  int middle_text_count = 0;
-  char** top_texts = NULL;
-  int top_text_count = 0;
+  char** middle_texts;
+  char** top_texts;
   
   switch (model->activity) {    
     case ACTIVITY_WALK:
       health_icon = ICON_WALK;
-      middle_texts = health_distance_texts();
-      middle_text_count = 4;
-      bottom_texts = health_total_steps_texts();
+      top_texts = health_generate_texts(config->health_walk_top);
+      middle_texts = health_generate_texts(config->health_walk_middle);
+      bottom_texts = health_generate_texts(config->health_walk_bottom);
       break;
     
     case ACTIVITY_RUN:
       health_icon = ICON_RUN;
-      top_texts = health_activity_duration_texts();
-      top_text_count = 4;
-      middle_texts = health_distance_texts();
-      middle_text_count = 4;
-      bottom_texts = health_activity_speed_texts();
+      top_texts = health_generate_texts(config->health_run_top);
+      middle_texts = health_generate_texts(config->health_run_middle);
+      bottom_texts = health_generate_texts(config->health_run_bottom);
       break;
     
     case ACTIVITY_SLEEP:
       health_icon = ICON_SLEEP;
-      bottom_texts = health_activity_duration_texts();
+      top_texts = health_generate_texts(config->health_sleep_top);
+      middle_texts = health_generate_texts(config->health_sleep_middle);
+      bottom_texts = health_generate_texts(config->health_sleep_bottom);
       break;
     
     case ACTIVITY_CALM:
     default:
       health_icon = ICON_STEP;
-      bottom_texts = health_total_steps_texts();
+      top_texts = health_generate_texts(config->health_normal_top);
+      middle_texts = health_generate_texts(config->health_normal_middle);
+      bottom_texts = health_generate_texts(config->health_normal_bottom);
       break;
   }
+  
+  int top_text_count = top_texts ? 4 : 0;
+  int middle_text_count = middle_texts ? 4 : 0;
+  int bottom_text_count = bottom_texts ? 4 : 0;
   
   // Calculate center alignment
   GRect bounds = layer_get_bounds(layer);
@@ -360,6 +435,29 @@ void health_update_proc(Layer *layer, GContext *ctx) {
   // Draw the bottom text
   draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30), bottom_text_size.w, bottom_text_size.h);
   draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
+  
+  // Free allocated memory
+  if (top_texts) {
+    free(top_texts[0]);
+    free(top_texts[1]);
+    free(top_texts[2]);
+    free(top_texts[3]);
+    free(top_texts);
+  }
+  if (middle_texts) {
+    free(middle_texts[0]);
+    free(middle_texts[1]);
+    free(middle_texts[2]);
+    free(middle_texts[3]);
+    free(middle_texts);
+  }
+  if (bottom_texts) {
+    free(bottom_texts[0]);
+    free(bottom_texts[1]);
+    free(bottom_texts[2]);
+    free(bottom_texts[3]);
+    free(bottom_texts);
+  }
 }
 #endif
 
@@ -686,8 +784,10 @@ void activity_changed() {
     view.suspension_reason &= ~SUSPENSION_ACTIVITY;
   } else {
     // Suspend alternating layers and show health layer
-    view.suspension_reason |= SUSPENSION_ACTIVITY;
-    alternating_layers_show_layer(view.layers.health);
+    if (config->health_stick) {
+      view.suspension_reason |= SUSPENSION_ACTIVITY;
+      alternating_layers_show_layer(view.layers.health);
+    }
   }
 }
 #endif
@@ -802,14 +902,14 @@ void view_init() {
   if (config->enable_sun) model->events.on_sunrise_change = sunrise_sunset_changed;
   if (config->enable_sun) model->events.on_sunset_change = sunrise_sunset_changed;
   #if defined(PBL_HEALTH)
-  model->events.on_activity_change = activity_changed;
+  if (config->enable_health) model->events.on_activity_change = activity_changed;
   #endif
   
   // Initialize some layers
   if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
   if (config->enable_battery) battery_changed();
   #if defined(PBL_HEALTH)
-  activity_changed();
+  if (config->enable_health) activity_changed();
   #endif
 }
 

@@ -12,8 +12,9 @@ int weather_fetch_countdown = 0;
 #if defined(PBL_HEALTH)
 #define ACTIVITY_MONITOR_WINDOW 10
 struct StepStamp {
-  int totalStepCount;
+  int totalCalories;
   int totalDistance;
+  int totalStepCount;
   time_t time;
 };
 
@@ -32,8 +33,8 @@ static bool is_asleep() {
 }
 
 static bool fetch_weather() {
-  // Check bluetooth connection, JS Ready and sleeping
-  if (connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
+  // Check configuration of weather/sunrise/sunset, bluetooth connection, JS Ready and sleeping
+  if ((config->enable_sun || config->enable_weather) && connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
     // Bluetooth connected, prepare outgoing message
     DictionaryIterator *iter;
     AppMessageResult result = app_message_outbox_begin(&iter);
@@ -115,8 +116,9 @@ void update_health() {
   const int STEPS_PER_MINUTE_RUNNING = 110;
   
   // Fill the activity buffer for this minute
-  activity_buffer[activity_buffer_index].totalStepCount = (int)health_service_sum_today(HealthMetricStepCount);
+  activity_buffer[activity_buffer_index].totalCalories = (int)health_service_sum_today(HealthMetricActiveKCalories) + (int)health_service_sum_today(HealthMetricRestingKCalories);;
   activity_buffer[activity_buffer_index].totalDistance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters);
+  activity_buffer[activity_buffer_index].totalStepCount = (int)health_service_sum_today(HealthMetricStepCount);
   activity_buffer[activity_buffer_index].time = time(NULL);
   
   // Calculate the average step pace in the buffer
@@ -156,10 +158,11 @@ void update_health() {
   }
   
   // Update activity counters
-  int total_step_count = activity_buffer[last_index].totalStepCount;
+  int calories = activity_buffer[last_index].totalCalories - activity_start.totalCalories;
   int duration = (activity_buffer[last_index].time - activity_start.time) / SECONDS_PER_MINUTE;
   int distance = activity_buffer[last_index].totalDistance - activity_start.totalDistance;
-  model_set_activity_counters(total_step_count, duration, distance);
+  int step_count = activity_buffer[last_index].totalStepCount - activity_start.totalStepCount;
+  model_set_activity_counters(calories, duration, distance, step_count);
   
   // Move index to next slot in buffer
   activity_buffer_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;

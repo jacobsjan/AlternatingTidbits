@@ -45,7 +45,23 @@
             "cfgEnableBattery",
             "cfgEnableError",
             "cfgEnableSun",
-            "cfgEnableWeather"
+            "cfgEnableWeather",
+            "cfgEnableHealth",
+            "cfgHealthStick",
+            "cfgHealthUnits",
+            "cfgHealthNumbers",
+            "cfgHealthNormalLine1",
+            "cfgHealthNormalLine2",
+            "cfgHealthNormalLine3",
+            "cfgHealthWalkLine1",
+            "cfgHealthWalkLine2",
+            "cfgHealthWalkLine3",
+            "cfgHealthRunLine1",
+            "cfgHealthRunLine2",
+            "cfgHealthRunLine3",
+            "cfgHealthSleepLine1",
+            "cfgHealthSleepLine2",
+            "cfgHealthSleepLine3"
         ],
         "projectType": "native",
         "resources": {
@@ -78,7 +94,7 @@
             "basalt",
             "chalk"
         ],
-        "uuid": "5e843fcb-4327-40c1-b6f5-3ce0e2356b7b",
+        "uuid": "a5585369-0349-4418-b151-1b70ee053989",
         "watchapp": {
             "watchface": true
         }

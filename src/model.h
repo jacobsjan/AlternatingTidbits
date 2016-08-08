@@ -36,6 +36,31 @@ enum Activities {
   ACTIVITY_SLEEP,
 };
 
+#if defined(PBL_HEALTH)
+enum HealthIndicator {
+  HEALTH_EMPTY = 1,
+  HEALTH_AVG_CALORIES_TILL_NOW,
+  HEALTH_AVG_DISTANCE_TILL_NOW,
+  HEALTH_AVG_STEPS_TILL_NOW,
+  HEALTH_AVG_TOTAL_CALORIES,
+  HEALTH_AVG_TOTAL_DISTANCE,
+  HEALTH_AVG_TOTAL_STEPS,
+  HEALTH_TODAY_CALORIES,
+  HEALTH_TODAY_DISTANCE,
+  HEALTH_TODAY_STEPS,
+  HEALTH_ACTIVITY_CALORIES,
+  HEALTH_ACTIVITY_DISTANCE,
+  HEALTH_ACTIVITY_DURATION,
+  HEALTH_ACTIVITY_PACE,
+  HEALTH_ACTIVITY_SPEED,
+  HEALTH_ACTIVITY_STEPS,
+  HEALTH_TIME_DEEP_SLEEP,
+  HEALTH_TIME_TOTAL_SLEEP,
+  HEALTH_AVG_TIME_DEEP_SLEEP,
+  HEALTH_AVG_TIME_TOTAL_SLEEP
+};
+#endif
+
 struct ModelEvents {
   void (*on_error_change)(enum ErrorCodes prevError);
   void (*on_time_change)();
@@ -62,9 +87,10 @@ struct Model {
   bool battery_plugged;
   #if defined(PBL_HEALTH)
   enum Activities activity;
-  int activity_total_step_count;
+  int activity_calories;
   int activity_duration;
   int activity_distance;
+  int activity_step_count;
   #endif
   
   struct ModelEvents events;
@@ -81,7 +107,7 @@ void model_set_sunset(int sunset);
 void model_set_battery(uint8_t charge, bool charging, bool plugged);
 #if defined(PBL_HEALTH)
 void model_set_activity(enum Activities activity);
-void model_set_activity_counters(int total_step_count, int duration, int distance);
+void model_set_activity_counters(int calories, int duration, int distance, int step_count);
 #endif
 
 extern struct Model* model;

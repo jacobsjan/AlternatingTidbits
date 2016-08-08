@@ -65,12 +65,26 @@ Pebble.addEventListener('webviewclosed', function(e) {
   // Get the keys and values from each config item
   var dict = clay.getSettings(e.response);
   
-  // Convert weather refresh to int
-  dict[keys.cfgWeatherRefresh] = parseInt(dict[keys.cfgWeatherRefresh]);
-  
   // Calculate alternative timezone offset
   var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
   dict[keys.cfgTimeZoneOffset] = timezoneOffset;
+  
+  // Convert health indicators to int
+  dict[keys.cfgHealthNormalLine1] = parseInt(dict[keys.cfgHealthNormalLine1]);
+  dict[keys.cfgHealthNormalLine2] = parseInt(dict[keys.cfgHealthNormalLine2]);
+  dict[keys.cfgHealthNormalLine3] = parseInt(dict[keys.cfgHealthNormalLine3]);
+  dict[keys.cfgHealthWalkLine1] = parseInt(dict[keys.cfgHealthWalkLine1]);
+  dict[keys.cfgHealthWalkLine2] = parseInt(dict[keys.cfgHealthWalkLine2]);
+  dict[keys.cfgHealthWalkLine3] = parseInt(dict[keys.cfgHealthWalkLine3]);
+  dict[keys.cfgHealthRunLine1] = parseInt(dict[keys.cfgHealthRunLine1]);
+  dict[keys.cfgHealthRunLine2] = parseInt(dict[keys.cfgHealthRunLine2]);
+  dict[keys.cfgHealthRunLine3] = parseInt(dict[keys.cfgHealthRunLine3]);
+  dict[keys.cfgHealthSleepLine1] = parseInt(dict[keys.cfgHealthSleepLine1]);
+  dict[keys.cfgHealthSleepLine2] = parseInt(dict[keys.cfgHealthSleepLine2]);
+  dict[keys.cfgHealthSleepLine3] = parseInt(dict[keys.cfgHealthSleepLine3]);
+  
+  // Convert weather refresh to int
+  dict[keys.cfgWeatherRefresh] = parseInt(dict[keys.cfgWeatherRefresh]);
   
   // Determine alternative timezone offset based on timezone name
   var split = dict[keys.cfgTimeZoneCity].split('/');

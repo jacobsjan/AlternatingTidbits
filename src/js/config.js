@@ -120,6 +120,12 @@ module.exports = [
       },
       {
         "type": "toggle",
+        "messageKey": "cfgEnableHealth",
+        "label": "Health",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
         "messageKey": "cfgEnableSun",
         "label": "Sunset/Sunrise",
         "defaultValue": true
@@ -129,7 +135,7 @@ module.exports = [
         "messageKey": "cfgEnableWeather",
         "label": "Weather",
         "defaultValue": true
-      },
+      }
     ]
   },
   {
@@ -184,6 +190,735 @@ module.exports = [
       { 
         "type": "text", 
         "defaultValue": "Error messages are shown for 15 sec on the watch anyway but enabling this repeats them every few minutes.",
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "capabilities": ["HEALTH"],
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Health"
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgHealthStick",
+        "label": "Stick during activity",
+        "description": "Alternating will be suspended during walks/runs/sleep.",
+        "defaultValue": true
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthUnits",
+        "defaultValue": 'M',
+        "label": "Distance units",
+        "options": [
+          { 
+            "label": "(Kilo)meters", 
+            "value": 'M' 
+          },
+          { 
+            "label": "Miles", 
+            "value": 'I' 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthNumbers",
+        "label": "Number format",
+        "defaultValue": 'M',
+        "options": [
+          { 
+            "label": "1.000,00", 
+            "value": 'M' 
+          },
+          { 
+            "label": "1,000.00", 
+            "value": 'I' 
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "defaultValue": "During normal activity",
+        "size": "5"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthNormalLine1",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 1",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthNormalLine2",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 2",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthNormalLine3",
+        "defaultValue": constants.TODAY_STEPS,
+        "label": "Line 3",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "defaultValue": "During walks",
+        "size": "5"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthWalkLine1",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 1",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          },
+          { 
+            "label": "Walk calories", 
+            "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Walk distance", 
+            "value": constants.ACTIVITY_DISTANCE 
+          },
+          { 
+            "label": "Walk duration", 
+            "value": constants.ACTIVITY_DURATION 
+          },
+          { 
+            "label": "Walk pace", 
+            "value": constants.ACTIVITY_PACE 
+          },
+          { 
+            "label": "Walk speed", 
+            "value": constants.ACTIVITY_SPEED 
+          },
+          { 
+            "label": "Walk steps", 
+            "value": constants.ACTIVITY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthWalkLine2",
+        "defaultValue": constants.ACTIVITY_DISTANCE,
+        "label": "Line 2",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          },
+          { 
+            "label": "Walk calories", 
+            "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Walk distance", 
+            "value": constants.ACTIVITY_DISTANCE 
+          },
+          { 
+            "label": "Walk duration", 
+            "value": constants.ACTIVITY_DURATION 
+          },
+          { 
+            "label": "Walk pace", 
+            "value": constants.ACTIVITY_PACE 
+          },
+          { 
+            "label": "Walk speed", 
+            "value": constants.ACTIVITY_SPEED 
+          },
+          { 
+            "label": "Walk steps", 
+            "value": constants.ACTIVITY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthWalkLine3",
+        "defaultValue": constants.TODAY_STEPS,
+        "label": "Line 3",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          },
+          { 
+            "label": "Walk calories", 
+            "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Walk distance", 
+            "value": constants.ACTIVITY_DISTANCE 
+          },
+          { 
+            "label": "Walk duration", 
+            "value": constants.ACTIVITY_DURATION 
+          },
+          { 
+            "label": "Walk pace", 
+            "value": constants.ACTIVITY_PACE 
+          },
+          { 
+            "label": "Walk speed", 
+            "value": constants.ACTIVITY_SPEED 
+          },
+          { 
+            "label": "Walk steps", 
+            "value": constants.ACTIVITY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "defaultValue": "During runs",
+        "size": "5"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthRunLine1",
+        "defaultValue": constants.ACTIVITY_DURATION,
+        "label": "Line 1",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Run calories", 
+            "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Run distance", 
+            "value": constants.ACTIVITY_DISTANCE 
+          },
+          { 
+            "label": "Run duration", 
+            "value": constants.ACTIVITY_DURATION 
+          },
+          { 
+            "label": "Run pace", 
+            "value": constants.ACTIVITY_PACE 
+          },
+          { 
+            "label": "Run speed", 
+            "value": constants.ACTIVITY_SPEED 
+          },
+          { 
+            "label": "Run steps", 
+            "value": constants.ACTIVITY_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthRunLine2",
+        "defaultValue": constants.ACTIVITY_DISTANCE,
+        "label": "Line 2",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Run calories", 
+            "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Run distance", 
+            "value": constants.ACTIVITY_DISTANCE 
+          },
+          { 
+            "label": "Run duration", 
+            "value": constants.ACTIVITY_DURATION 
+          },
+          { 
+            "label": "Run pace", 
+            "value": constants.ACTIVITY_PACE 
+          },
+          { 
+            "label": "Run speed", 
+            "value": constants.ACTIVITY_SPEED 
+          },
+          { 
+            "label": "Run steps", 
+            "value": constants.ACTIVITY_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthRunLine3",
+        "defaultValue": constants.ACTIVITY_SPEED,
+        "label": "Line 3",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. calories till now", 
+            "value": constants.AVG_CALORIES_TILL_NOW 
+          },
+          { 
+            "label": "Avg. distance till now", 
+            "value": constants.AVG_DISTANCE_TILL_NOW 
+          },
+          { 
+            "label": "Avg. steps till now", 
+            "value": constants.AVG_STEPS_TILL_NOW 
+          },
+          { 
+            "label": "Avg. total calories", 
+            "value": constants.AVG_TOTAL_CALORIES 
+          },
+          { 
+            "label": "Avg. total distance", 
+            "value": constants.AVG_TOTAL_DISTANCE 
+          },
+          { 
+            "label": "Avg. total steps", 
+            "value": constants.AVG_TOTAL_STEPS 
+          },
+          { 
+            "label": "Run calories", 
+            "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Run distance", 
+            "value": constants.ACTIVITY_DISTANCE 
+          },
+          { 
+            "label": "Run duration", 
+            "value": constants.ACTIVITY_DURATION 
+          },
+          { 
+            "label": "Run pace", 
+            "value": constants.ACTIVITY_PACE 
+          },
+          { 
+            "label": "Run speed", 
+            "value": constants.ACTIVITY_SPEED 
+          },
+          { 
+            "label": "Run steps", 
+            "value": constants.ACTIVITY_STEPS 
+          },
+          { 
+            "label": "Total calories", 
+            "value": constants.TODAY_CALORIES 
+          },
+          { 
+            "label": "Total distance", 
+            "value": constants.TODAY_DISTANCE 
+          },
+          { 
+            "label": "Total steps", 
+            "value": constants.TODAY_STEPS 
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "defaultValue": "During sleep",
+        "size": "5"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthSleepLine1",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 1",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. total deep sleep", 
+            "value": constants.AVG_TIME_DEEP_SLEEP 
+          },
+          { 
+            "label": "Avg. total sleep", 
+            "value": constants.AVG_TIME_TOTAL_SLEEP 
+          },
+          { 
+            "label": "Time deep sleep", 
+            "value": constants.TIME_DEEP_SLEEP 
+          },
+          { 
+            "label": "Total time slept", 
+            "value": constants.TIME_TOTAL_SLEEP 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthSleepLine2",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 2",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. total deep sleep", 
+            "value": constants.AVG_TIME_DEEP_SLEEP 
+          },
+          { 
+            "label": "Avg. total sleep", 
+            "value": constants.AVG_TIME_TOTAL_SLEEP 
+          },
+          { 
+            "label": "Time deep sleep", 
+            "value": constants.TIME_DEEP_SLEEP 
+          },
+          { 
+            "label": "Total time slept", 
+            "value": constants.TIME_TOTAL_SLEEP 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthSleepLine3",
+        "defaultValue": constants.TIME_TOTAL_SLEEP,
+        "label": "Line 3",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Avg. total deep sleep", 
+            "value": constants.AVG_TIME_DEEP_SLEEP 
+          },
+          { 
+            "label": "Avg. total sleep", 
+            "value": constants.AVG_TIME_TOTAL_SLEEP 
+          },
+          { 
+            "label": "Time deep sleep", 
+            "value": constants.TIME_DEEP_SLEEP 
+          },
+          { 
+            "label": "Total time slept", 
+            "value": constants.TIME_TOTAL_SLEEP 
+          }
+        ]
       }
     ]
   },
