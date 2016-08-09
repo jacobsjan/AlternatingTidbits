@@ -132,6 +132,20 @@ void update_health() {
     first_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;
   }
   if (first_index != last_index) {
+    // Check for counter reset at midnight
+    if (activity_buffer[last_index].totalStepCount < activity_buffer[first_index].totalStepCount) {
+      // Invert values in the buffer below zero, the last minute before midnight will seem like a pauze as no data of it is available
+      int maxValuesIndex = (last_index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+      for (int i = 0; i < ACTIVITY_MONITOR_WINDOW; ++i) {
+        if (i != last_index) {
+          activity_buffer[i].totalCalories -= activity_buffer[maxValuesIndex].totalCalories;
+          activity_buffer[i].totalDistance -= activity_buffer[maxValuesIndex].totalDistance;
+          activity_buffer[i].totalStepCount -= activity_buffer[maxValuesIndex].totalStepCount;          
+        }
+      }
+    }
+    
+    // Calculate average step pace
     avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[first_index].totalStepCount;
     avg_steps_per_minute /= (last_index - first_index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
   } else {

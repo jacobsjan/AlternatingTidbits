@@ -855,6 +855,10 @@ module.exports = [
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
+            "label": "Current nap", 
+            "value": constants.ACTIVITY_DURATION
+          },
+          { 
             "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
