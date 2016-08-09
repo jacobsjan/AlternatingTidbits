@@ -113,7 +113,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
 #if defined(PBL_HEALTH)
 void update_health() {
   const int STEPS_PER_MINUTE_WALKING = 45;
-  const int STEPS_PER_MINUTE_RUNNING = 110;
+  const int STEPS_PER_MINUTE_RUNNING = 120;
   
   // Fill the activity buffer for this minute
   activity_buffer[activity_buffer_index].totalCalories = (int)health_service_sum_today(HealthMetricActiveKCalories);
@@ -126,7 +126,7 @@ void update_health() {
   int first_index;
   int last_index = activity_buffer_index;
   if (activity_buffer[ACTIVITY_MONITOR_WINDOW - 1].time == 0) {
-    // Buffer isn't completey full yet
+    // Buffer isn't completely full yet
     first_index = 0;
   } else {
     first_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;
@@ -151,19 +151,79 @@ void update_health() {
     current_activity = ACTIVITY_NORMAL;
   }
   
+  // Create sharp begin edge
   if (current_activity != model->activity || activity_start.time == 0) {
-    // The activity is changing
-    model_set_activity(current_activity);
-    activity_start = activity_buffer[first_index]; // Crude, can be improved
+    if (model->activity == ACTIVITY_RUN && current_activity == ACTIVITY_WALK) {
+      // We stopped running, keep running as current activity, check at the sharp end check whether to switch back to walking or not
+      current_activity = ACTIVITY_RUN;
+    } else {
+      if (current_activity == ACTIVITY_WALK || current_activity == ACTIVITY_RUN) {
+        // Starting new walk or run, find exact activity start
+        for (int index = first_index, next_index = (index + 1) % ACTIVITY_MONITOR_WINDOW; next_index != last_index; index = next_index, next_index = (index + 1) % ACTIVITY_MONITOR_WINDOW) {
+          int steps_this_minute = activity_buffer[next_index].totalStepCount - activity_buffer[index].totalStepCount;
+          if (steps_this_minute < (current_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
+            // Activity had not yet started this minute
+            first_index = next_index;
+          } else {
+            // Activity had started this minute, start_index found
+            if (current_activity == ACTIVITY_WALK) {
+              // Make sure we didn't start a run rather than a walk
+              avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[first_index].totalStepCount;
+              avg_steps_per_minute /= (last_index - first_index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+              if (avg_steps_per_minute >= STEPS_PER_MINUTE_RUNNING) {
+                // Started a run rather than a walk
+                current_activity = ACTIVITY_RUN;
+                if (steps_this_minute < STEPS_PER_MINUTE_RUNNING) {
+                  // But this minute wasn't all running, start at the next
+                  first_index = next_index;
+                }
+              }
+            }
+            break;
+          }
+        }
+      }
+      
+      // Set activity start
+      activity_start = activity_buffer[first_index]; 
+    }
+  }
+  
+  // Create sharp end edge
+  if (current_activity == ACTIVITY_WALK || current_activity == ACTIVITY_RUN) {
+    // Find the last minute we actually walked/ran
+    bool foundActivity = false;
+    for (int index = last_index, prev_index = (index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW; prev_index != first_index; index = prev_index, prev_index = (index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW) {
+      int steps_this_minute = activity_buffer[index].totalStepCount - activity_buffer[prev_index].totalStepCount;
+        if (steps_this_minute < (current_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
+          // We were not walking/running this minute
+          last_index = prev_index;
+        } else {
+          // Found the last minute we walked/ran
+          foundActivity = true;
+          break;
+        }
+    }
+    
+    // Make sure we didn't go from running to walking
+    if (!foundActivity && current_activity == ACTIVITY_RUN) {
+      // Didn't find any running, last running minuted dropped out of the buffer, presume started walking at start of buffer although a pauze is possible
+      current_activity = ACTIVITY_WALK;
+      last_index = activity_buffer_index;
+      activity_start = activity_buffer[first_index];
+    }
   }
   
   // Update activity counters
   int calories = activity_buffer[last_index].totalCalories - activity_start.totalCalories;
-  int duration = (activity_buffer[last_index].time - activity_start.time) / SECONDS_PER_MINUTE;
+  int duration = (activity_buffer[last_index].time - activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
   int distance = activity_buffer[last_index].totalDistance - activity_start.totalDistance;
   int step_count = activity_buffer[last_index].totalStepCount - activity_start.totalStepCount;
-  model_set_activity_counters(calories, duration, distance, step_count);
   
+  // Update the model
+  model_set_activity_counters(calories, duration, distance, step_count);
+  if (model->activity != current_activity) model_set_activity(current_activity);
+    
   // Move index to next slot in buffer
   activity_buffer_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;
 }
