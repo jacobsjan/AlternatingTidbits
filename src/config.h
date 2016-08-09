@@ -12,6 +12,9 @@ struct Config {
   char date_format_top[11];
   char date_format_bottom[11];
   
+  bool vibrate_bluetooth;
+  bool vibrate_hourly;
+  
   bool enable_timezone;
   bool enable_battery;
   bool enable_error;

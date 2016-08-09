@@ -35,6 +35,12 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateFormatBottom);
   if(tuple && (cfgChanged = true)) strncpy(config->date_format_bottom, tuple->value->cstring, sizeof(config->date_format_bottom));
   
+  // Vibrations
+  tuple = dict_find(iter, MESSAGE_KEY_cfgVibrateBluetooth);
+  if(tuple && (cfgChanged = true)) config->vibrate_bluetooth = tuple->value->int8; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgVibrateHourly);
+  if(tuple && (cfgChanged = true)) config->vibrate_hourly = tuple->value->int8;   
+  
   // Enabling tidbits
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableTimezone);
   if(tuple && (cfgChanged = true)) config->enable_timezone = tuple->value->int8; 
@@ -97,7 +103,6 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->health_sleep_middle = tuple->value->int32; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgHealthSleepLine3);
   if(tuple && (cfgChanged = true)) config->health_sleep_bottom = tuple->value->int32;
-  
   #endif 
   
   // Weather
@@ -121,6 +126,9 @@ void config_init() {
     config->date_hours_leading_zero = false;   
     strncpy(config->date_format_top, "z", sizeof(config->date_format_top));
     strncpy(config->date_format_bottom, "B e", sizeof(config->date_format_bottom));
+    
+    config->vibrate_bluetooth = true;
+    config->vibrate_hourly = false;
     
     config->enable_timezone = false;
     config->enable_battery = true;

@@ -271,13 +271,20 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     time_copy = *tick_time;
     model_set_time(&time_copy);
   }
+  
+  if (units_changed & HOUR_UNIT) {
+    // Vibrate on the hour 
+    if (!is_asleep() && config->vibrate_hourly) {
+      vibes_short_pulse();
+    }
+  }
 }
 
 static void connection_handler(bool connected) {
   // Vibrate if connection changed 
   if ((model->error == ERROR_CONNECTION) == connected) {
-    // Check to make sure user is not sleeping
-    if (!is_asleep()) {
+    // Check to make sure user is not sleeping and config asks for vibrations
+    if (!is_asleep() && config->vibrate_bluetooth) {
       // Vibrate to indicate connection change
       vibes_double_pulse();
     }

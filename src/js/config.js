@@ -86,6 +86,36 @@ module.exports = [
     ]
   },
   {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Vibrations"
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgVibrateBluetooth",
+        "label": "Vibrate on bluetooth (dis)connect",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgVibrateHourly",
+        "label": "Vibrate on the hour",
+        "defaultValue": false,
+        "description": "Vibrations are suspended during sleep.",
+        "capabilities": ["HEALTH"]
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgVibrateHourly",
+        "label": "Vibrate on the hour",
+        "defaultValue": false,
+        "capabilities": ["NOT_HEALTH"]
+      }
+    ]
+  },
+  {
     "type": "heading",
     "defaultValue": "Alternating Tidbits"
   },
@@ -122,7 +152,8 @@ module.exports = [
         "type": "toggle",
         "messageKey": "cfgEnableHealth",
         "label": "Health",
-        "defaultValue": true
+        "defaultValue": true,
+        "capabilities": ["HEALTH"]
       },
       {
         "type": "toggle",

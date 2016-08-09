@@ -61,7 +61,9 @@
             "cfgHealthRunLine3",
             "cfgHealthSleepLine1",
             "cfgHealthSleepLine2",
-            "cfgHealthSleepLine3"
+            "cfgHealthSleepLine3",
+            "cfgVibrateBluetooth",
+            "cfgVibrateHourly"
         ],
         "projectType": "native",
         "resources": {
