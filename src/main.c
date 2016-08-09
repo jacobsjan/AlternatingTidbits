@@ -11,15 +11,18 @@ int weather_fetch_countdown = 0;
   
 #if defined(PBL_HEALTH)
 #define ACTIVITY_MONITOR_WINDOW 10
-struct StepStamp {
+const int STEPS_PER_MINUTE_WALKING = 45;
+const int STEPS_PER_MINUTE_RUNNING = 120;
+  
+struct ActivityStamp {
   int totalCalories;
   int totalDistance;
   int totalStepCount;
   time_t time;
 };
 
-struct StepStamp activity_start;
-struct StepStamp activity_buffer[ACTIVITY_MONITOR_WINDOW];
+struct ActivityStamp activity_start;
+struct ActivityStamp activity_buffer[ACTIVITY_MONITOR_WINDOW];
 int activity_buffer_index;
 #endif
 
@@ -112,9 +115,6 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
 
 #if defined(PBL_HEALTH)
 void update_health() {
-  const int STEPS_PER_MINUTE_WALKING = 45;
-  const int STEPS_PER_MINUTE_RUNNING = 120;
-  
   // Fill the activity buffer for this minute
   activity_buffer[activity_buffer_index].totalCalories = (int)health_service_sum_today(HealthMetricActiveKCalories);
   activity_buffer[activity_buffer_index].totalDistance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters);
@@ -152,7 +152,7 @@ void update_health() {
   }
   
   // Create sharp begin edge
-  if (current_activity != model->activity || activity_start.time == 0) {
+  if (avg_steps_per_minute > 0 && (current_activity != model->activity || activity_start.time == 0)) {
     if (model->activity == ACTIVITY_RUN && current_activity == ACTIVITY_WALK) {
       // We stopped running, keep running as current activity, check at the sharp end check whether to switch back to walking or not
       current_activity = ACTIVITY_RUN;
@@ -190,7 +190,7 @@ void update_health() {
   }
   
   // Create sharp end edge
-  if (current_activity == ACTIVITY_WALK || current_activity == ACTIVITY_RUN) {
+  if (avg_steps_per_minute > 0 && (current_activity == ACTIVITY_WALK || current_activity == ACTIVITY_RUN)) {
     // Find the last minute we actually walked/ran
     bool foundActivity = false;
     for (int index = last_index, prev_index = (index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW; prev_index != first_index; index = prev_index, prev_index = (index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW) {
@@ -222,7 +222,7 @@ void update_health() {
   
   // Update the model
   model_set_activity_counters(calories, duration, distance, step_count);
-  if (model->activity != current_activity) model_set_activity(current_activity);
+  if (avg_steps_per_minute > 0 && model->activity != current_activity) model_set_activity(current_activity);
     
   // Move index to next slot in buffer
   activity_buffer_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;
@@ -281,6 +281,45 @@ void battery_handler(BatteryChargeState charge) {
   model_set_battery(charge.charge_percent, charge.is_charging, charge.is_plugged);
 }
 
+#if defined(PBL_HEALTH)
+void health_init() {
+  // Load stored health activity
+  if (persist_exists(STORAGE_HEALTH_ACTIVITY) && persist_exists(STORAGE_HEALTH_ACTIVITY_START)) {
+    enum Activities saved_activity = persist_read_int(STORAGE_HEALTH_ACTIVITY);
+    struct ActivityStamp saved_activity_start;
+    persist_read_data(STORAGE_HEALTH_ACTIVITY_START, &saved_activity_start, sizeof(saved_activity_start));
+    
+    // Validate that the activity is still ongoing
+    if (saved_activity == ACTIVITY_SLEEP) {
+      // Are we still sleeping?
+      if (is_asleep()) {
+        // Yep, resume activity
+        model_set_activity(saved_activity);
+        activity_start = saved_activity_start; 
+      }
+    } else if (saved_activity == ACTIVITY_WALK || saved_activity == ACTIVITY_RUN) {
+      // Is the average #steps since saved activity start greater than the threshold?
+      int duration_since_start = (time(NULL) - saved_activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
+      int steps_since_start = (int)health_service_sum_today(HealthMetricStepCount) - saved_activity_start.totalStepCount;
+      int avg_steps_per_minute = steps_since_start / duration_since_start;
+      if (avg_steps_per_minute >= (saved_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
+        // Yep, resume activity
+        activity_start = saved_activity_start; 
+        
+        int calories = (int)health_service_sum_today(HealthMetricActiveKCalories) - activity_start.totalCalories;
+        int duration = duration_since_start;
+        int distance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters) - activity_start.totalDistance;
+        int step_count = (int)health_service_sum_today(HealthMetricStepCount) - activity_start.totalStepCount;
+
+        // Update the model
+        model_set_activity_counters(calories, duration, distance, step_count);
+        model_set_activity(saved_activity);
+      }
+    }
+  }
+}
+#endif
+
 static void app_init() {     
   // Initialize the configuration
   config_init();
@@ -291,6 +330,11 @@ static void app_init() {
   model_set_time(tick_time);
   if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
   battery_handler(battery_state_service_peek());
+  
+  // Load health data
+  #if defined(PBL_HEALTH)
+  health_init();
+  #endif
   
   // Initialize the view
   view_init();
@@ -326,6 +370,12 @@ static void app_deinit() {
   
   // Save configuration
   config_deinit();
+  
+  // Save health activity
+  #if defined(PBL_HEALTH)
+  persist_write_int(STORAGE_HEALTH_ACTIVITY, model->activity);
+  persist_write_data(STORAGE_HEALTH_ACTIVITY_START, &activity_start, sizeof(struct ActivityStamp)); 
+  #endif
 }
 
 static void crash_detection_init() {
