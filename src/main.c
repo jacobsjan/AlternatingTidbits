@@ -8,6 +8,8 @@
 #define FETCH_RETRIES 5
 bool js_ready = false;
 int weather_fetch_countdown = 0;
+AppTimer* switcher_timer = NULL;
+bool tapping = false;
   
 #if defined(PBL_HEALTH)
 #define ACTIVITY_MONITOR_WINDOW 10
@@ -104,7 +106,6 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     }
     
     // Restart view  
-    model_reset_events();
     view_deinit();
     view_init();
     
@@ -298,8 +299,52 @@ static void connection_handler(bool connected) {
   }
 }
 
-void battery_handler(BatteryChargeState charge) {
+static void battery_handler(BatteryChargeState charge) {
   model_set_battery(charge.charge_percent, charge.is_charging, charge.is_plugged);
+}
+
+void accel_handler(AccelData *data, uint32_t num_samples) {
+  // Detect minor taps
+  for (uint32_t i = 0; i < num_samples - 1; ++i) {
+    int xDiff = abs(data[i + 1].x - data[i].x);
+    int yDiff = abs(data[i + 1].y - data[i].y);
+    int zDiff = abs(data[i + 1].z - data[i].z);
+    int diff = (xDiff + yDiff + zDiff) / 8; // Accelerator samples are always multiples of 8?
+    
+    if (diff >= 200) {
+      tapping = true; // tap started
+    } else if (diff < 50 && tapping) {
+      tapping = false; // tap ended
+      
+      // Signal tap detected
+      model_signal_tap();
+      
+      // Prolong switcher
+      if (switcher_timer) app_timer_reschedule(switcher_timer, 30000);
+    }
+  }
+}
+
+void switcher_timeout_callback(void *data) {
+  // Unsubscribe from accelerator data
+  accel_data_service_unsubscribe();
+  
+  // De-activate the switcher 
+  model_set_switcher(false); 
+  switcher_timer = NULL;
+}
+
+static void accel_tap_handler(AccelAxisType axis, int32_t direction) {
+  // Activate the switcher
+  model_set_switcher(true);
+  
+  // Subscribe to accelerator data to detect minor taps
+  accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
+  accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
+    
+  // Deactivate switcher after 30sec
+  if (switcher_timer) app_timer_cancel(switcher_timer);
+  switcher_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
 }
 
 #if defined(PBL_HEALTH)
@@ -377,10 +422,14 @@ static void app_init() {
   
   // Register with BatteryService
   battery_state_service_subscribe(battery_handler);
+  
+  // Subscribe to tap events
+  accel_tap_service_subscribe(accel_tap_handler);
 }
 
 static void app_deinit() {
   // Unsubscribe from services
+  accel_tap_service_unsubscribe();
   battery_state_service_unsubscribe();
   connection_service_unsubscribe();
   tick_timer_service_unsubscribe();

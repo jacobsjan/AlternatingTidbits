@@ -69,6 +69,13 @@
         "resources": {
             "media": [
                 {
+                    "characterRegex": ".",
+                    "file": "fonts/icons_16",
+                    "name": "FONT_ICONS_16",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
                     "characterRegex": "[0-9:]",
                     "file": "fonts/sparkler_54",
                     "name": "FONT_SPARKLER_54",

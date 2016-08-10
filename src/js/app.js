@@ -128,6 +128,29 @@ Pebble.addEventListener('ready', function(e) {
       'cfgTimeZoneOffset': calculateTimezoneOffset(settings.cfgTimeZoneCity)
     });
   }
+  
+  // Timeline test
+  /*var timeline = require('./timeline');
+  
+  // An hour ahead
+  var date = new Date();
+  date.setHours(date.getHours() + 1);
+  
+  // Create the pin
+  var PIN_ID = "timeline-push-pin-test";
+  var pin = {
+      "id": "pin-" + PIN_ID,
+      "time": date.toISOString(),
+      "layout": {
+        "type": "genericPin",
+        "title": "Example Pin",
+        "body": "This is an example pin from the timeline-push-pin example app!",
+        "tinyIcon": "system://images/SCHEDULED_EVENT"
+      }
+    };
+    timeline.insertUserPin(pin, function(responseText) { 
+      console.log('Result: ' + responseText);
+    });*/
 });
 
 Pebble.addEventListener('appmessage', function(e) {

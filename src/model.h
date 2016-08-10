@@ -73,6 +73,8 @@ struct ModelEvents {
   void (*on_activity_change)();
   void (*on_activity_counters_change)();
   #endif
+  void (*on_switcher_change)();
+  void (*on_tap)();
 };
 
 struct Model {
@@ -92,6 +94,7 @@ struct Model {
   int activity_distance;
   int activity_step_count;
   #endif
+  bool switcher;
   
   struct ModelEvents events;
 };
@@ -109,5 +112,7 @@ void model_set_battery(uint8_t charge, bool charging, bool plugged);
 void model_set_activity(enum Activities activity);
 void model_set_activity_counters(int calories, int duration, int distance, int step_count);
 #endif
+void model_set_switcher(bool active);
+void model_signal_tap();
 
 extern struct Model* model;

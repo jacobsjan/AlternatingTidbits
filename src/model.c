@@ -89,3 +89,17 @@ void model_set_activity_counters(int calories, int duration, int distance, int s
   }
 }
 #endif
+
+void model_set_switcher(bool active) {
+  model->switcher = active;
+      
+  if (model->events.on_switcher_change) {
+    model->events.on_switcher_change();
+  }
+}
+
+void model_signal_tap() {
+  if (model->events.on_tap) {
+    model->events.on_tap();
+  }
+}

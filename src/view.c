@@ -8,6 +8,7 @@ enum SuspensionReasons {
   SUSPENSION_NONE = 0,
   SUSPENSION_ERROR_ALERT = 1,
   SUSPENSION_ACTIVITY = 2,
+  SUSPENSION_SWITCHER = 4,
 };
 
 struct Layers {
@@ -17,6 +18,7 @@ struct Layers {
   TextLayer *minute;
   Layer *date_top;
   Layer *date_bottom;
+  Layer *switcher;
   
   // Alternating layers, only one visible at a time
   Layer *error;
@@ -33,6 +35,7 @@ struct Fonts {
   GFont time;
   GFont weekday;
   GFont icons;
+  GFont icons_small;
 };
 
 struct View {
@@ -41,7 +44,8 @@ struct View {
   struct Fonts fonts;
   
   // Alternating layer info
-  struct Layer *alt_layers[sizeof(struct Layers) / sizeof(Layer*) - 5]; // Very nasty trick to avoid forgetting to increase the array size
+  struct Layer *alt_layers[sizeof(struct Layers) / sizeof(Layer*) - 6]; // Very nasty trick to avoid forgetting to increase the array size
+  char* alt_layer_icons[sizeof(struct Layers) / sizeof(Layer*) - 6];
   int alt_layer_count;
   int alt_layer_visible;
   
@@ -51,6 +55,9 @@ struct View {
   
   // Alert info
   AppTimer *alert_timeout_handler;
+  
+  // Switcher animation
+  AnimationProgress switcher_animation_progress;
 };
 
 struct View view;
@@ -577,6 +584,35 @@ void week_bar_sunday_update_proc(Layer* layer, GContext* ctx) {
   week_bar_update_proc(layer, ctx, false);
 }
 
+void switcher_update_proc(Layer* layer, GContext* ctx) {
+  GRect bounds = layer_get_bounds(layer);
+  GRect inner_rect = GRect(bounds.origin.x + 18, bounds.origin.y + 18, bounds.size.w - 18 * 2, bounds.size.h - 18 * 2);
+  
+  // Draw layer queue
+  for (int pos = 0, i = (view.alt_layer_visible + 1) % view.alt_layer_count; i != view.alt_layer_visible; ++pos, i = (i + 1) % view.alt_layer_count) {
+    // Calculate icon position, possibly in animation
+    GPoint icon_point;
+    if (pos < view.alt_layer_count - 2) {
+      // Icons move up one place
+      icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * 20 / ANIMATION_NORMALIZED_MAX));
+    } else {
+      // Last icon in the queue makes a long circle
+      icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * (240 - pos * 20) / ANIMATION_NORMALIZED_MAX));  
+    }
+    
+    // Draw circle
+    graphics_context_set_fill_color(ctx, config->color_secondary);
+    graphics_fill_circle(ctx, icon_point, 10);
+    
+    // Draw icon
+    char* icon = view.alt_layer_icons[i];      
+    GSize icon_size = graphics_text_layout_get_content_size(icon, view.fonts.icons_small, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+    GRect icon_bounds = GRect(icon_point.x - icon_size.w / 2, icon_point.y - icon_size.h / 2, icon_size.w, icon_size.h);
+    graphics_context_set_text_color(ctx, config->color_background);
+    graphics_draw_text(ctx, icon, view.fonts.icons_small, icon_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+  }
+}
+
 void alternating_layers_show(int index) {
   if (index < view.alt_layer_count) {
     // Hide the previously visible layer
@@ -606,17 +642,21 @@ void alternating_layers_show_layer(Layer* layer) {
   }
 }
 
-int alternating_layers_add(Layer* layer) {
+int alternating_layers_add(Layer* layer, char* icon) {
   // Retrieve and increase layer count
   int index = view.alt_layer_count++; 
   
   // Add the layer
   view.alt_layers[index] = layer;
+  view.alt_layer_icons[index] = icon;
   
   // Immediately show it if it was the first available layer
   if (index == 0) {
     alternating_layers_show(index);
   }
+  
+  // Update switcher if active
+  if (view.layers.switcher) layer_mark_dirty(view.layers.switcher);
   
   return index; 
 }
@@ -636,6 +676,7 @@ void alternating_layers_remove(Layer* layer) {
     // Remove layer
     for (int i = index; i < view.alt_layer_count; ++i) {
       view.alt_layers[i] = view.alt_layers[i + 1];
+      view.alt_layer_icons[i] = view.alt_layer_icons[i + 1];
     } 
     
     // Make sure the layer is no longer shown
@@ -649,8 +690,8 @@ static void alert_timeout_handler(void *context) {
   // Clear the suspension
   view.suspension_reason &= ~SUSPENSION_ERROR_ALERT;
   
-  // Show the layer hidden by the alert
-  alternating_layers_show(view.suspension_return_layer);
+  // Show the layer hidden by the alert when not in the switcher
+  if (!(view.suspension_reason & SUSPENSION_SWITCHER)) alternating_layers_show(view.suspension_return_layer);
   
   // Deregister timeout handler
   view.alert_timeout_handler = NULL;
@@ -672,7 +713,7 @@ void error_changed(enum ErrorCodes prevError) {
 
     view.layers.error = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
     layer_set_update_proc(view.layers.error, error_update_proc);
-    alternating_layers_add(view.layers.error);
+    alternating_layers_add(view.layers.error, ICON_BLUETOOTH);
   }
   
   // Set suspension
@@ -732,7 +773,7 @@ void battery_changed() {
     
     view.layers.battery = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
     layer_set_update_proc(view.layers.battery, battery_update_proc);
-    alternating_layers_add(view.layers.battery);
+    alternating_layers_add(view.layers.battery, icons_get_battery_symbol(70, false, false));
   } else if (view.layers.battery != NULL && model->battery_charge > config->battery_show_from) {
     // Destroy battery layer
     alternating_layers_remove(view.layers.battery);
@@ -749,7 +790,7 @@ void weather_changed() {
     
     view.layers.weather = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
     layer_set_update_proc(view.layers.weather, weather_update_proc);
-    alternating_layers_add(view.layers.weather);
+    alternating_layers_add(view.layers.weather, icons_get_weather_condition_symbol(CONDITION_CLOUDY, true));
   }
 }
 
@@ -761,7 +802,7 @@ void sunrise_sunset_changed() {
     
     view.layers.sunrise_sunset = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
     layer_set_update_proc(view.layers.sunrise_sunset, sunrise_sunset_update_proc);
-    alternating_layers_add(view.layers.sunrise_sunset);
+    alternating_layers_add(view.layers.sunrise_sunset, ICON_SUNRISE);
   }
 }
 
@@ -775,7 +816,7 @@ void activity_changed() {
     
     view.layers.health = layer_create(GRect(0, 0, bounds.size.w, 60 + PBL_IF_ROUND_ELSE(34, 30)));
     layer_set_update_proc(view.layers.health, health_update_proc);
-    alternating_layers_add(view.layers.health);
+    alternating_layers_add(view.layers.health, ICON_WALK);
   }
   
   // Suspend alternating when walking, running or sleeping
@@ -792,6 +833,61 @@ void activity_changed() {
 }
 #endif
 
+void switcher_changed() {
+  // Make sure the layer exists
+  if (model->switcher && view.layers.switcher == NULL) {
+    // Initialize switcher animation to finished
+    view.switcher_animation_progress = ANIMATION_NORMALIZED_MAX;
+    
+    // Create switcher layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+
+    view.layers.switcher = layer_create(GRect(0, 0, bounds.size.w, bounds.size.h));
+    layer_set_update_proc(view.layers.switcher, switcher_update_proc);
+    layer_add_child(window_layer, view.layers.switcher);
+    
+    // Suspend alternating
+    view.suspension_reason |= SUSPENSION_SWITCHER;
+  } else if (!model->switcher && view.layers.switcher != NULL) {
+    // Destroy the layer
+    layer_destroy(view.layers.switcher);    
+    view.layers.switcher = NULL;
+    
+    // Clear the suspension
+    view.suspension_reason &= ~SUSPENSION_SWITCHER;
+    
+    // Reactivate the health layer if on suspension
+    #if defined(PBL_HEALTH)
+    if (view.suspension_reason & SUSPENSION_ACTIVITY) alternating_layers_show_layer(view.layers.health);
+    #endif
+  }
+}
+
+static void switcher_animation_update(Animation *animation, const AnimationProgress progress) {
+  view.switcher_animation_progress = progress;
+  layer_mark_dirty(view.layers.switcher);
+}
+
+void tapped() {
+  // Initialize switcher animation to start
+  view.switcher_animation_progress = 0;
+  
+  // Tapped in the switcher, alternate to the next available layer
+  if (view.alt_layer_count > 0) { 
+    alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
+  }
+  
+  // Animate the layer queue
+  Animation *animation = animation_create();
+  animation_set_duration(animation, 250);
+  static const AnimationImplementation implementation = {
+    .update = switcher_animation_update
+  };
+  animation_set_implementation(animation, &implementation);
+  animation_schedule(animation);
+}
+
 void main_window_load(Window *window) {
   // Get information about the Window
   Layer *window_layer = window_get_root_layer(window);
@@ -801,6 +897,7 @@ void main_window_load(Window *window) {
   view.fonts.time = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_SPARKLER_54));
   view.fonts.weekday = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_EXPRESSWAY_18));
   view.fonts.icons = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_30));
+  view.fonts.icons_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_16));
 
   // Create and add the hour layer
   view.layers.hour = text_layer_create(
@@ -846,7 +943,7 @@ void main_window_load(Window *window) {
   if (config->enable_timezone) {    
     view.layers.timezone = layer_create(GRect(0, 0, bounds.size.w, 60 + PBL_IF_ROUND_ELSE(34, 30)));
     layer_set_update_proc(view.layers.timezone, timezone_update_proc);
-    alternating_layers_add(view.layers.timezone);
+    alternating_layers_add(view.layers.timezone, ICON_TIMEZONE);
   }
   
   // Update time text
@@ -860,6 +957,7 @@ void main_window_unload(Window *window) {
   text_layer_destroy(view.layers.minute);
   layer_destroy(view.layers.date_top);
   layer_destroy(view.layers.date_bottom);
+  if (view.layers.switcher) layer_destroy(view.layers.switcher);
   if (view.layers.battery) layer_destroy(view.layers.battery);
   if (view.layers.error) layer_destroy(view.layers.error);
   if (view.layers.weather) layer_destroy(view.layers.weather);
@@ -896,6 +994,8 @@ void view_init() {
   // Attach to model events
   model->events.on_error_change = error_changed;
   model->events.on_time_change = time_changed;
+  model->events.on_switcher_change = switcher_changed;
+  model->events.on_tap = tapped;
   if (config->enable_battery) model->events.on_battery_change = battery_changed;
   if (config->enable_weather) model->events.on_weather_temperature_change = weather_changed;
   if (config->enable_weather) model->events.on_weather_condition_change = weather_changed;
@@ -914,6 +1014,9 @@ void view_init() {
 }
 
 void view_deinit() {  
+  // Unregister from model events
+  model_reset_events();
+  
   // Hide window
   window_stack_pop(true);
   
