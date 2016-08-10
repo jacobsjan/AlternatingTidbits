@@ -334,13 +334,14 @@ void switcher_timeout_callback(void *data) {
   switcher_timer = NULL;
 }
 
-static void accel_tap_handler(AccelAxisType axis, int32_t direction) {
+static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
   // Activate the switcher
   model_set_switcher(true);
   
   // Subscribe to accelerator data to detect minor taps
   accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
   accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
+  tapping = false;
     
   // Deactivate switcher after 30sec
   if (switcher_timer) app_timer_cancel(switcher_timer);
@@ -424,7 +425,7 @@ static void app_init() {
   battery_state_service_subscribe(battery_handler);
   
   // Subscribe to tap events
-  accel_tap_service_subscribe(accel_tap_handler);
+  accel_tap_service_subscribe(accel_flick_handler);
 }
 
 static void app_deinit() {

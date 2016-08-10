@@ -186,6 +186,10 @@ void timezone_update_proc(Layer *layer, GContext *ctx) {
     hour[1] = hour[2];
   }
   
+  // Make sure we leave the localtime behind in a good state
+  altEpoch = time(NULL);
+  localtime(&altEpoch);
+  
   char* bottom_texts[] = { config->timezone_city };
   int bottom_text_count = 1;
   char* middle_texts[] = { hour, ":", minute, " ", ampm };
@@ -584,21 +588,43 @@ void week_bar_sunday_update_proc(Layer* layer, GContext* ctx) {
   week_bar_update_proc(layer, ctx, false);
 }
 
+// From https://github.com/robisodd/concentricity/blob/master/src/rect2.c
+#if defined(PBL_RECT)
+GPoint get_point_on_rect(int angle, GRect rect) {                         // Returns a point on rect made from center of rect and angle
+  int32_t sin = sin_lookup(angle), cos = cos_lookup(angle);               // Calculate once and store, to make quicker and cleaner
+  int32_t dy = (sin > 0 ? (rect.size.h - 1) : (0 - rect.size.h)) / 2;     // Distance to top or bottom edge (from center)
+  int32_t dx = (cos > 0 ? (rect.size.w - 1) : (0 - rect.size.w)) / 2;     // Distance to left or right edge (from center)
+  if(abs(dx * sin) < abs(dy * cos))                                   // if (distance to vertical line) < (distance to horizontal line)
+    dy = (dx * sin) / cos;                                                // calculate y position on left or right edge
+   else                                                                   // else: (distance to top or bottom edge) < (distance to left or right edge)
+    dx = (dy * cos) / sin;                                                // calculate x position on top or bottom line
+  return GPoint(dx + rect.origin.x + (rect.size.w / 2), dy + rect.origin.y + (rect.size.h / 2));  // Return point on rect
+}
+#endif
+
 void switcher_update_proc(Layer* layer, GContext* ctx) {
   GRect bounds = layer_get_bounds(layer);
+  #if defined(PBL_RECT)
+  GRect inner_rect = GRect(bounds.origin.x + 14, bounds.origin.y + 14, bounds.size.w - 14 * 2, bounds.size.h - 14 * 2);
+  #elif defined(PBL_ROUND)
   GRect inner_rect = GRect(bounds.origin.x + 18, bounds.origin.y + 18, bounds.size.w - 18 * 2, bounds.size.h - 18 * 2);
-  
+  #endif
   // Draw layer queue
   for (int pos = 0, i = (view.alt_layer_visible + 1) % view.alt_layer_count; i != view.alt_layer_visible; ++pos, i = (i + 1) % view.alt_layer_count) {
     // Calculate icon position, possibly in animation
-    GPoint icon_point;
+    int angle;
     if (pos < view.alt_layer_count - 2) {
       // Icons move up one place
-      icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * 20 / ANIMATION_NORMALIZED_MAX));
+      angle = 300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * 20 / ANIMATION_NORMALIZED_MAX;
     } else {
       // Last icon in the queue makes a long circle
-      icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * (240 - pos * 20) / ANIMATION_NORMALIZED_MAX));  
+      angle = 300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * (240 - pos * 20) / ANIMATION_NORMALIZED_MAX;  
     }
+    #if defined(PBL_RECT)
+    GPoint icon_point = icon_point = get_point_on_rect(DEG_TO_TRIGANGLE(angle - 90), inner_rect);
+    #elif defined(PBL_ROUND)
+    GPoint icon_point = icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(angle));
+    #endif
     
     // Draw circle
     graphics_context_set_fill_color(ctx, config->color_secondary);
