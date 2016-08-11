@@ -166,6 +166,27 @@ module.exports = [
         "messageKey": "cfgEnableWeather",
         "label": "Weather",
         "defaultValue": true
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgAlternateMode",
+        "label": "Alternate",
+        "defaultValue": 'B',
+        "options": [
+          { 
+            "label": "Every minute + switcher", 
+            "value": 'B' 
+          },
+          { 
+            "label": "Every minute only", 
+            "value": 'M' 
+          },
+          { 
+            "label": "Switcher only", 
+            "value": 'S' 
+          }
+        ],
+        "description": "Flick your wrist to start the <strong>switcher</strong> then tap your pebble gently to alternate tibbits."
       }
     ]
   },
@@ -918,6 +939,10 @@ module.exports = [
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
+            "label": "Current nap", 
+            "value": constants.ACTIVITY_DURATION
+          },
+          { 
             "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
@@ -944,6 +969,10 @@ module.exports = [
           { 
             "label": "Avg. daily sleep", 
             "value": constants.AVG_TIME_TOTAL_SLEEP 
+          },
+          { 
+            "label": "Current nap", 
+            "value": constants.ACTIVITY_DURATION
           },
           { 
             "label": "Deep sleep today", 

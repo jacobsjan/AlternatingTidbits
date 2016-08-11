@@ -23,6 +23,7 @@ struct Config {
   #endif
   bool enable_sun;
   bool enable_weather;
+  char alternate_mode;
   
   int timezone_offset;
   char timezone_city[20];

@@ -785,7 +785,7 @@ void time_changed() {
   text_layer_set_text(view.layers.minute, s_minute_buffer);
   
   // Alternate every minute to the next available layer
-  if (view.suspension_reason == SUSPENSION_NONE && view.alt_layer_count > 0) { 
+  if (view.suspension_reason == SUSPENSION_NONE && view.alt_layer_count > 0 && config->alternate_mode != 'S') { 
     // Not on suspension, alternate layer
     alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
   }
@@ -1020,8 +1020,10 @@ void view_init() {
   // Attach to model events
   model->events.on_error_change = error_changed;
   model->events.on_time_change = time_changed;
-  model->events.on_switcher_change = switcher_changed;
-  model->events.on_tap = tapped;
+  if (config->alternate_mode != 'M') {
+    model->events.on_switcher_change = switcher_changed;
+    model->events.on_tap = tapped;
+  }
   if (config->enable_battery) model->events.on_battery_change = battery_changed;
   if (config->enable_weather) model->events.on_weather_temperature_change = weather_changed;
   if (config->enable_weather) model->events.on_weather_condition_change = weather_changed;

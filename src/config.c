@@ -56,6 +56,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->enable_sun = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableWeather);
   if(tuple && (cfgChanged = true)) config->enable_weather = tuple->value->int8;
+  tuple = dict_find(iter, MESSAGE_KEY_cfgAlternateMode);
+  if(tuple && (cfgChanged = true)) config->alternate_mode = tuple->value->cstring[0]; 
   
   // Timezone
   tuple = dict_find(iter, MESSAGE_KEY_cfgTimeZoneOffset);
@@ -138,6 +140,7 @@ void config_init() {
     #endif
     config->enable_sun = true;
     config->enable_weather = true;
+    config->alternate_mode = 'B';
     
     config->battery_show_from = 100;
     config->battery_accent_from = 30;

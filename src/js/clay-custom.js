@@ -55,7 +55,7 @@ module.exports = function(minified) {
   clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function() {
     // Enabling tidbits
     var enableSection = clayConfig.getItemByMessageKey('cfgEnableBattery').$element[0].parentElement;
-    var enableCheckboxes = enableSection.querySelectorAll('input');
+    var enableCheckboxes = enableSection.querySelectorAll('.component-toggle input');
     var i = 0;
     var siblingSection = enableSection.nextElementSibling;
     while (siblingSection.classList.contains('section')) {
