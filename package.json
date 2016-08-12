@@ -72,15 +72,15 @@
         "resources": {
             "media": [
                 {
-                    "file": "fonts/icons_56",
-                    "name": "FONT_ICONS_56",
+                    "characterRegex": ".",
+                    "file": "fonts/icons_16",
+                    "name": "FONT_ICONS_16",
                     "targetPlatforms": null,
                     "type": "font"
                 },
                 {
-                    "characterRegex": ".",
-                    "file": "fonts/icons_16",
-                    "name": "FONT_ICONS_16",
+                    "file": "fonts/icons_56",
+                    "name": "FONT_ICONS_56",
                     "targetPlatforms": null,
                     "type": "font"
                 },

@@ -405,6 +405,9 @@ static void app_init() {
   health_init();
   #endif
   
+  // Initialize localization of time and date info
+  setlocale(LC_TIME, i18n_get_system_locale());
+    
   // Initialize the view
   view_init();
   

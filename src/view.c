@@ -544,11 +544,11 @@ void date_update_proc(Layer *layer, GContext *ctx, char* format) {
     char* accentText;
     if ((element >= 'a' && element <= 'z') || (element >= 'A' && element <= 'Z')) {
       // Date element
-      normalText = (char*)malloc(12 * sizeof(char));
+      normalText = (char*)malloc(20 * sizeof(char));
       accentText = NULL;
       char strfmt[] = "%x";
       strfmt[1] = element;
-      strftime(normalText, 12, strfmt, model->time);
+      strftime(normalText, 20, strfmt, model->time);
       
       if ((format[i] == 'n' && normalText[0] == '0') || (element == 'e' && normalText[0] == ' ')) {
         // Remove leading 0 of month or leading space of day
@@ -591,7 +591,7 @@ void date_bottom_update_proc(Layer *layer, GContext *ctx) {
 void week_bar_update_proc(Layer* layer, GContext* ctx, bool start_with_monday) {
   // Calculate center alignmet
   GRect bounds = layer_get_bounds(layer);
-  char day_texts[5][7];
+  char day_texts[6][7]; // Large enough for unicode
   GSize day_sizes[7];
   GFont day_fonts[7];
   
@@ -599,9 +599,12 @@ void week_bar_update_proc(Layer* layer, GContext* ctx, bool start_with_monday) {
   for (struct tm day = { .tm_wday = 0 }; day.tm_wday <= 6; day.tm_wday++) {
     int i = day.tm_wday;
     strftime(day_texts[i], sizeof(day_texts[i]), "%a ", &day);
-    day_texts[i][1] += 'A' - 'a'; // Capitalize seconds letter
-    day_texts[i][2] = ' '; // Abreviate to two characters per day
-    day_texts[i][3] = 0;
+    if (day_texts[i][0] >= 'a' && day_texts[i][0] <= 'z') day_texts[i][0] += 'A' - 'a'; // Capitalize first letter, e.g. in Spanish
+    if (day_texts[i][1] >= 'a' && day_texts[i][1] <= 'z') day_texts[i][1] += 'A' - 'a'; // Capitalize second letter, e.g. in English
+    if ((day_texts[i][0] & 0xc0) != 0xc0 && (day_texts[i][1] & 0xc0) != 0xc0) { // Check for unicode e.g. in Spanish
+      day_texts[i][2] = ' '; // Abreviate to two characters per day 
+      day_texts[i][3] = 0;
+    }
     day_fonts[i] = fonts_get_system_font(day.tm_wday == 0 || day.tm_wday == 6 ? FONT_KEY_GOTHIC_14_BOLD : FONT_KEY_GOTHIC_14);
     day_sizes[i] = graphics_text_layout_get_content_size(day_texts[i], day_fonts[i], bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
     text_size.w += day_sizes[i].w;

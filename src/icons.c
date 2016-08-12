@@ -10,7 +10,7 @@ char* icons_get_weather_condition_symbol(enum WeatherCondition code, bool is_day
     case CONDITION_CLEAR:
       return is_day ? "\uf00d" : "\uf02e"; // wi-day-sunny : wi-night-clear
     case CONDITION_CLOUDY:
-      return "\uf013"; // wi-cloudy 
+      return "\uf041"; // wi-cloudy 
     case CONDITION_FOG:
       return is_day ? "\uf003" : "\uf04a"; // wi-day-fog : wi-night-fog
     case CONDITION_LIGHT_RAIN:
@@ -40,7 +40,7 @@ char* icons_get_weather_condition_symbol(enum WeatherCondition code, bool is_day
     case CONDITION_LIGHT_CLOUDY:
       return is_day ? "\uf002" : "\uf086"; // wi-day-cloudy : wi-night-alt-cloudy
     case CONDITION_PARTLY_CLOUDY:
-      return "\uf041"; //wi-cloud
+      return "\uf013"; //wi-cloud
     default:
       return "\uf03e"; //wi-cloud-refresh
   }
