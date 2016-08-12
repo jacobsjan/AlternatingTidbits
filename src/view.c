@@ -25,6 +25,9 @@ struct Layers {
   Layer *weather;
   Layer *sunrise_sunset;
   Layer *battery;
+  #if defined(PBL_COMPASS)
+  Layer *compass;
+  #endif
   Layer *timezone;
   #if defined(PBL_HEALTH)
   Layer *health;
@@ -36,6 +39,7 @@ struct Fonts {
   GFont weekday;
   GFont icons;
   GFont icons_small;
+  GFont icons_large;
 };
 
 struct View {
@@ -56,7 +60,12 @@ struct View {
   // Alert info
   AppTimer *alert_timeout_handler;
   
+  // Compass info
+  bool compass_subscribed;
+  CompassHeadingData compass_heading_data;
+  
   // Switcher animation
+  Animation* switcher_animation;
   AnimationProgress switcher_animation_progress;
 };
 
@@ -252,6 +261,53 @@ void battery_update_proc(Layer *layer, GContext *ctx) {
   GColor battery_color = model->battery_charge <= config->battery_accent_from ? config->color_accent : config->color_secondary;
   draw_centered(layer, ctx, battery_icon, battery_color, sizeof(texts) / sizeof(texts[0]), texts);
 }
+
+#if defined(PBL_COMPASS)
+static void compass_heading_updated(CompassHeadingData heading) {
+  // Update heading data
+  view.compass_heading_data = heading;
+    
+  // Update layer or unsubscribe if it's no longer visible
+  if (view.layers.compass == NULL || view.alt_layers[view.alt_layer_visible] != view.layers.compass) {
+    // Unsubscribe from compass events
+    if (view.compass_subscribed) {
+      compass_service_unsubscribe();
+      view.compass_subscribed = false;
+    }
+  } else {
+    // Redraw the compass
+    layer_mark_dirty(view.layers.compass);
+  }
+}
+
+static void compass_update_proc(Layer *layer, GContext *ctx) {    
+  if (!view.compass_subscribed) {
+    // Subscribe to compass heading updates
+    compass_service_subscribe(&compass_heading_updated);
+    compass_service_set_heading_filter(TRIG_MAX_ANGLE / 32);
+    view.compass_subscribed = true;  
+  }
+  
+  // Read heading
+  char* icon;
+  if (view.compass_heading_data.compass_status != CompassStatusDataInvalid) {
+    int degrees = TRIGANGLE_TO_DEG(view.compass_heading_data.magnetic_heading);
+    icon = icons_get_compass(degrees);
+  } else {
+    icon = ICON_COMPASS_ROTATE;
+  }
+  
+  // Calculate center alignment
+  GRect bounds = layer_get_bounds(layer);
+  GSize icon_size = graphics_text_layout_get_content_size(icon, view.fonts.icons_large, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
+  int icon_left = bounds.origin.x + (bounds.size.w - icon_size.w) / 2;
+  
+  // Draw the compass
+  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(8, 4), icon_size.w, icon_size.h);
+  graphics_context_set_text_color(ctx, config->color_secondary);
+  graphics_draw_text(ctx, icon, view.fonts.icons_large, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+}
+#endif
 
 #if defined(PBL_HEALTH)
 char* alloc_print_d(char* fmt, int i) {
@@ -605,10 +661,11 @@ GPoint get_point_on_rect(int angle, GRect rect) {                         // Ret
 void switcher_update_proc(Layer* layer, GContext* ctx) {
   GRect bounds = layer_get_bounds(layer);
   #if defined(PBL_RECT)
-  GRect inner_rect = GRect(bounds.origin.x + 14, bounds.origin.y + 14, bounds.size.w - 14 * 2, bounds.size.h - 14 * 2);
+  GRect inner_rect = grect_inset(bounds, GEdgeInsets(14));
   #elif defined(PBL_ROUND)
-  GRect inner_rect = GRect(bounds.origin.x + 18, bounds.origin.y + 18, bounds.size.w - 18 * 2, bounds.size.h - 18 * 2);
+  GRect inner_rect = grect_inset(bounds, GEdgeInsets(18));
   #endif
+  
   // Draw layer queue
   for (int pos = 0, i = (view.alt_layer_visible + 1) % view.alt_layer_count; i != view.alt_layer_visible; ++pos, i = (i + 1) % view.alt_layer_count) {
     // Calculate icon position, possibly in animation
@@ -808,6 +865,31 @@ void battery_changed() {
   }
 }
 
+#if defined(PBL_COMPASS)
+void compass_changed() {
+  if (view.layers.compass == NULL && (!config->compass_switcher_only || view.layers.switcher != NULL)) {    
+    // Create compass layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+    
+    view.layers.compass = layer_create(GRect(0, 0, bounds.size.w, 60 +  PBL_IF_ROUND_ELSE(34, 30)));
+    layer_set_update_proc(view.layers.compass, compass_update_proc);
+    alternating_layers_add(view.layers.compass, icons_get_compass(0)); 
+  } else if (view.layers.compass != NULL && (config->compass_switcher_only && view.layers.switcher == NULL)) {
+    // Unsubscribe from compass events
+    if (view.compass_subscribed) {
+      compass_service_unsubscribe();
+      view.compass_subscribed = false;
+    }
+    
+    // Destroy compass layer
+    alternating_layers_remove(view.layers.compass);
+    layer_destroy(view.layers.compass);
+    view.layers.compass = NULL;    
+  }
+}
+#endif
+
 void weather_changed() {
   if (view.layers.weather == NULL) {
     // Create weather layer
@@ -873,6 +955,11 @@ void switcher_changed() {
     layer_set_update_proc(view.layers.switcher, switcher_update_proc);
     layer_add_child(window_layer, view.layers.switcher);
     
+    // Create compass layer depending on configuration
+    #if defined(PBL_COMPASS)
+    compass_changed();
+    #endif
+    
     // Suspend alternating
     view.suspension_reason |= SUSPENSION_SWITCHER;
   } else if (!model->switcher && view.layers.switcher != NULL) {
@@ -882,6 +969,11 @@ void switcher_changed() {
     
     // Clear the suspension
     view.suspension_reason &= ~SUSPENSION_SWITCHER;
+    
+    // Destroy compass layer depending on configuration
+    #if defined(PBL_COMPASS)
+    compass_changed();
+    #endif
     
     // Reactivate the health layer if on suspension
     #if defined(PBL_HEALTH)
@@ -895,6 +987,11 @@ static void switcher_animation_update(Animation *animation, const AnimationProgr
   layer_mark_dirty(view.layers.switcher);
 }
 
+static void switcher_animation_teardown(Animation *animation) {
+  animation_destroy(animation);
+  view.switcher_animation = NULL;
+}
+
 void tapped() {
   // Initialize switcher animation to start
   view.switcher_animation_progress = 0;
@@ -905,13 +1002,16 @@ void tapped() {
   }
   
   // Animate the layer queue
-  Animation *animation = animation_create();
-  animation_set_duration(animation, 250);
-  static const AnimationImplementation implementation = {
-    .update = switcher_animation_update
-  };
-  animation_set_implementation(animation, &implementation);
-  animation_schedule(animation);
+  if (!view.switcher_animation) {
+    view.switcher_animation = animation_create();
+    animation_set_duration(view.switcher_animation, 250);
+    static const AnimationImplementation implementation = {
+      .update = switcher_animation_update,
+      .teardown = switcher_animation_teardown
+    };
+    animation_set_implementation(view.switcher_animation, &implementation);
+    animation_schedule(view.switcher_animation);
+  }
 }
 
 void main_window_load(Window *window) {
@@ -924,6 +1024,7 @@ void main_window_load(Window *window) {
   view.fonts.weekday = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_EXPRESSWAY_18));
   view.fonts.icons = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_30));
   view.fonts.icons_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_16));
+  view.fonts.icons_large = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_56));
 
   // Create and add the hour layer
   view.layers.hour = text_layer_create(
@@ -972,6 +1073,11 @@ void main_window_load(Window *window) {
     alternating_layers_add(view.layers.timezone, ICON_TIMEZONE);
   }
   
+  // Create compass layer depending on configuration
+  #if defined(PBL_COMPASS)
+  compass_changed();
+  #endif
+  
   // Update time text
   time_changed();
 }
@@ -985,6 +1091,9 @@ void main_window_unload(Window *window) {
   layer_destroy(view.layers.date_bottom);
   if (view.layers.switcher) layer_destroy(view.layers.switcher);
   if (view.layers.battery) layer_destroy(view.layers.battery);
+  #if defined(PBL_COMPASS)
+  if (view.layers.compass) layer_destroy(view.layers.compass);
+  #endif
   if (view.layers.error) layer_destroy(view.layers.error);
   if (view.layers.weather) layer_destroy(view.layers.weather);
   if (view.layers.sunrise_sunset) layer_destroy(view.layers.sunrise_sunset);
@@ -997,6 +1106,8 @@ void main_window_unload(Window *window) {
   fonts_unload_custom_font(view.fonts.time);
   fonts_unload_custom_font(view.fonts.weekday);
   fonts_unload_custom_font(view.fonts.icons);
+  fonts_unload_custom_font(view.fonts.icons_small);
+  fonts_unload_custom_font(view.fonts.icons_large);
 }
 
 void view_init() { 

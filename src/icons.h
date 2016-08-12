@@ -11,6 +11,10 @@ char* ICON_FETCH_ERROR = "\uf03e"; // wi-cloud-refresh (Weather Icons)
 
 char* ICON_TIMEZONE = "\uf2a7"; 
 
+#if defined(PBL_COMPASS)
+char* ICON_COMPASS_ROTATE = "\uf0c1"; 
+#endif
+
 char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
 char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)
 
@@ -21,3 +25,6 @@ char* ICON_SLEEP = "\uf2af";
 
 char* icons_get_weather_condition_symbol(enum WeatherCondition code, bool is_day);
 char* icons_get_battery_symbol(uint8_t charge, bool charging, bool plugged);
+#if defined(PBL_COMPASS)
+char* icons_get_compass(int degrees);
+#endif

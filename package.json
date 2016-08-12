@@ -64,11 +64,19 @@
             "cfgHealthSleepLine3",
             "cfgVibrateBluetooth",
             "cfgVibrateHourly",
-            "cfgAlternateMode"
+            "cfgAlternateMode",
+            "cfgEnableCompass",
+            "cfgCompassSwitcherOnly"
         ],
         "projectType": "native",
         "resources": {
             "media": [
+                {
+                    "file": "fonts/icons_56",
+                    "name": "FONT_ICONS_56",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
                 {
                     "characterRegex": ".",
                     "file": "fonts/icons_16",

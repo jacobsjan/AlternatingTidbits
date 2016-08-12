@@ -1,6 +1,7 @@
 #include <pebble.h>
 
 #include "model.h"
+#include "config.h"
 
 //IDs from http://openweathermap.org/weather-conditions
 //Icons from http://erikflowers.github.io/weather-icons/
@@ -86,3 +87,28 @@ char* icons_get_battery_symbol(uint8_t charge, bool charging, bool plugged) {
     }
   }
 }
+
+#if defined(PBL_COMPASS)
+char* icons_get_compass(int degrees) {
+  int heading = ((degrees * 2 + 22) / 45) % 16;
+  switch(heading) {
+    case  1: return "\uf0b2";
+    case  2: return "\uf0b3";
+    case  3: return "\uf0b4";
+    case  4: return "\uf0b5";
+    case  5: return "\uf0b6";
+    case  6: return "\uf0b7";
+    case  7: return "\uf0b8";
+    case  8: return "\uf0b9";
+    case  9: return "\uf0ba";
+    case 10: return "\uf0bb";
+    case 11: return "\uf0bc";
+    case 12: return "\uf0bd";
+    case 13: return "\uf0be";
+    case 14: return "\uf0bf";
+    case 15: return "\uf0c0";
+    default:
+    case  0: return "\uf0b1";
+  }
+}
+#endif

@@ -28,7 +28,7 @@ struct ActivityStamp activity_buffer[ACTIVITY_MONITOR_WINDOW];
 int activity_buffer_index;
 #endif
 
-static bool is_asleep() {
+static inline bool is_asleep() {
   bool sleeping = false;
   #if defined(PBL_HEALTH) 
   HealthActivityMask activities = health_service_peek_current_activities();
@@ -311,7 +311,7 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
     int zDiff = abs(data[i + 1].z - data[i].z);
     int diff = (xDiff + yDiff + zDiff) / 8; // Accelerator samples are always multiples of 8?
     
-    if (diff >= 200) {
+    if (!(data[i].did_vibrate || data[i + 1].did_vibrate) && diff >= 200) {
       tapping = true; // tap started
     } else if (diff < 50 && tapping) {
       tapping = false; // tap ended
@@ -335,17 +335,19 @@ void switcher_timeout_callback(void *data) {
 }
 
 static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
-  // Activate the switcher
-  model_set_switcher(true);
+  if (axis == ACCEL_AXIS_Y && !model->switcher && config->alternate_mode != 'M') {
+    // Activate the switcher
+    model_set_switcher(true);
   
-  // Subscribe to accelerator data to detect minor taps
-  accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
-  accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
-  tapping = false;
+    // Subscribe to accelerator data to detect minor taps
+    accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
+    accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
+    tapping = false;
     
-  // Deactivate switcher after 30sec
-  if (switcher_timer) app_timer_cancel(switcher_timer);
-  switcher_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
+    // Deactivate switcher after 30sec
+    if (switcher_timer) app_timer_cancel(switcher_timer);
+    switcher_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
+  }
 }
 
 #if defined(PBL_HEALTH)
@@ -424,11 +426,17 @@ static void app_init() {
   // Register with BatteryService
   battery_state_service_subscribe(battery_handler);
   
-  // Subscribe to tap events
+  // Subscribe to flick events
   accel_tap_service_subscribe(accel_flick_handler);
 }
 
 static void app_deinit() {
+  // De-initialize switcher
+  if (model->switcher) {
+    if (switcher_timer) app_timer_cancel(switcher_timer);
+    accel_data_service_unsubscribe();
+  }
+  
   // Unsubscribe from services
   accel_tap_service_unsubscribe();
   battery_state_service_unsubscribe();

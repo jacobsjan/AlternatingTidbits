@@ -144,6 +144,12 @@ module.exports = [
       },
       {
         "type": "toggle",
+        "messageKey": "cfgEnableCompass",
+        "label": "Compass",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
         "messageKey": "cfgEnableError",
         "label": "Error Messages",
         "defaultValue": false
@@ -171,19 +177,19 @@ module.exports = [
         "type": "select",
         "messageKey": "cfgAlternateMode",
         "label": "Alternate",
-        "defaultValue": 'B',
+        "defaultValue": "B",
         "options": [
           { 
             "label": "Every minute + switcher", 
-            "value": 'B' 
+            "value": "B" 
           },
           { 
             "label": "Every minute only", 
-            "value": 'M' 
+            "value": "M" 
           },
           { 
             "label": "Switcher only", 
-            "value": 'S' 
+            "value": "S" 
           }
         ],
         "description": "Flick your wrist to start the <strong>switcher</strong> then tap your pebble gently to alternate tibbits."
@@ -230,6 +236,23 @@ module.exports = [
         "step": 10,
         "capabilities": ["COLOR"]
       },
+    ]
+  },
+  {
+    "type": "section",
+    "capabilities": ["NOT_PLATFORM_DIORITE"],
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Compass"
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgCompassSwitcherOnly",
+        "label": "Only availble via switcher",
+        "description": "As the compass drains a lot of battery, it is strongly recommended to make it only accessible via the switcher.",
+        "defaultValue": true
+      }
     ]
   },
   {

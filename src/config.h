@@ -2,6 +2,9 @@
 #include <pebble.h>
 #include "model.h"
 
+// In wait of SDK 4.0
+#define PBL_COMPASS
+
 struct Config {
   GColor color_background;
   GColor color_primary;
@@ -17,6 +20,9 @@ struct Config {
   
   bool enable_timezone;
   bool enable_battery;
+  #if defined(PBL_COMPASS)
+  bool enable_compass;
+  #endif
   bool enable_error;
   #if defined(PBL_HEALTH)
   bool enable_health;
@@ -30,6 +36,10 @@ struct Config {
   
   int battery_show_from;
   int battery_accent_from;
+  
+  #if defined(PBL_COMPASS)
+  bool compass_switcher_only;
+  #endif
   
   #if defined(PBL_HEALTH)
   bool health_stick;
@@ -50,9 +60,6 @@ struct Config {
   #endif
   
   int weather_refresh;
-  
-  #if defined(PBL_HEALTH)
-  #endif
 };
 
 bool parse_configuration_messages(DictionaryIterator*);

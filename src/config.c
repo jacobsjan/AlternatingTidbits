@@ -46,6 +46,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->enable_timezone = tuple->value->int8; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableBattery);
   if(tuple && (cfgChanged = true)) config->enable_battery = tuple->value->int8;
+  #if defined(PBL_COMPASS) 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableCompass);
+  if(tuple && (cfgChanged = true)) config->enable_compass = tuple->value->int8;
+  #endif
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableError);
   if(tuple && (cfgChanged = true)) config->enable_error = tuple->value->int8;
   #if defined(PBL_HEALTH) 
@@ -71,6 +75,12 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   #if !defined(PBL_BW)
   tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryAccentFrom);
   if(tuple && (cfgChanged = true)) config->battery_accent_from = tuple->value->int32; 
+  #endif 
+  
+  // Compass
+  #if defined(PBL_COMPASS) 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCompassSwitcherOnly);
+  if(tuple && (cfgChanged = true)) config->compass_switcher_only = tuple->value->int8;
   #endif 
   
   // Health
@@ -134,6 +144,9 @@ void config_init() {
     
     config->enable_timezone = false;
     config->enable_battery = true;
+    #if defined(PBL_COMPASS)
+    config->enable_compass = true;
+    #endif
     config->enable_error = false;
     #if defined(PBL_HEALTH)
     config->enable_health = true;
@@ -144,6 +157,10 @@ void config_init() {
     
     config->battery_show_from = 100;
     config->battery_accent_from = 30;
+    
+    #if defined(PBL_COMPASS)
+    config->compass_switcher_only = true;
+    #endif
       
     #if defined(PBL_HEALTH)
     config->health_stick = true;
