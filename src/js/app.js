@@ -178,6 +178,7 @@ function fetchLocation() {
       window.navigator.geolocation.getCurrentPosition(function(pos) { //Success
         console.log('lat: ' + pos.coords.latitude);
         console.log('lng: ' + pos.coords.longitude);
+        console.log('altitude: ' + pos.coords.altitude + 'm (accuracy ' + pos.coords.altitudeAccuracy + 'm)');
     
         var loc = new geoloc(pos.coords.latitude, pos.coords.longitude);
         fetchWeather(loc);

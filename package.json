@@ -101,13 +101,6 @@
                     "name": "FONT_ICONS_30",
                     "targetPlatforms": null,
                     "type": "font"
-                },
-                {
-                    "characterRegex": ".",
-                    "file": "fonts/expressway_16",
-                    "name": "FONT_EXPRESSWAY_18",
-                    "targetPlatforms": null,
-                    "type": "font"
                 }
             ]
         },

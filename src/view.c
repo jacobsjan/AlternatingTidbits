@@ -38,8 +38,8 @@ struct Layers {
 };
 
 struct Fonts {
-  GFont time;
-  GFont weekday;
+  GFont primary;
+  GFont secondary;
   GFont icons;
   GFont icons_small;
   GFont icons_large;
@@ -95,7 +95,7 @@ GSize calculate_total_size(GRect bounds, int text_count, char *texts[]) {
   
   for (int i = 0; i < text_count; ++i) {
     if (texts[i]) {
-      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.secondary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
       result.w += text_size.w;
       result.h = text_size.h > result.h ? text_size.h : result.h;
     }
@@ -109,10 +109,10 @@ void draw_alternating_text(GContext *ctx, GRect bounds, int text_count, char *te
     if (texts[i]) {
       // Draw the text
       graphics_context_set_text_color(ctx, i % 2 == 0 ? config->color_secondary : config->color_accent); // Alternate color
-      graphics_draw_text(ctx, texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+      graphics_draw_text(ctx, texts[i], view.fonts.secondary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       
       // Shrink bounds to the right
-      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.weekday, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.secondary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
       bounds.origin.x += text_size.w;
       bounds.size.w -= text_size.w;
     }
@@ -134,7 +134,7 @@ void draw_centered(Layer *layer, GContext *ctx, char* icon, GColor icon_color, i
   graphics_draw_text(ctx, icon, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
     
   // Draw texts
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10), text_size.w, text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(6, 4), text_size.w, text_size.h);
   draw_alternating_text(ctx, draw_bounds, text_count, texts);
 }
 
@@ -161,7 +161,7 @@ void error_update_proc(Layer *layer, GContext *ctx) {
       break; 
     case ERROR_VIBRATION_OVERLOAD:
       symbol = ICON_VIBRATION_OVERLOAD;
-      text = "Switcher pauze";
+      text = " Switcher pause";
       break; 
     default:
       // Bluetooth ok once again alert
@@ -227,11 +227,11 @@ void timezone_update_proc(Layer *layer, GContext *ctx) {
   graphics_draw_text(ctx, ICON_TIMEZONE, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
   
   // Draw the time
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30) - 20, middle_text_size.w, middle_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 20, middle_text_size.w, middle_text_size.h);
   draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
     
   // Draw the city
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30), bottom_text_size.w, bottom_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24), bottom_text_size.w, bottom_text_size.h);
   draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
 }
 
@@ -516,15 +516,15 @@ void health_update_proc(Layer *layer, GContext *ctx) {
   graphics_draw_text(ctx, health_icon, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
   
   // Draw the top text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30) - 40, top_text_size.w, top_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 40, top_text_size.w, top_text_size.h);
   draw_alternating_text(ctx, draw_bounds, top_text_count, top_texts);
   
   // Draw the middle text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30) - 20, middle_text_size.w, middle_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 20, middle_text_size.w, middle_text_size.h);
   draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
     
   // Draw the bottom text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(34, 30), bottom_text_size.w, bottom_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24), bottom_text_size.w, bottom_text_size.h);
   draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
   
   // Free allocated memory
@@ -1072,8 +1072,8 @@ void main_window_load(Window *window) {
   GRect bounds = layer_get_bounds(window_layer);
 
   // Create GFonts
-  view.fonts.time = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_SPARKLER_54));
-  view.fonts.weekday = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_EXPRESSWAY_18));
+  view.fonts.primary = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_SPARKLER_54));
+  view.fonts.secondary = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); 
   view.fonts.icons = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_30));
   view.fonts.icons_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_16));
   view.fonts.icons_large = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_56));
@@ -1084,7 +1084,7 @@ void main_window_load(Window *window) {
   text_layer_set_background_color(view.layers.hour, GColorClear);
   text_layer_set_text_color(view.layers.hour, config->color_primary);
   text_layer_set_text_alignment(view.layers.hour, GTextAlignmentRight);
-  text_layer_set_font(view.layers.hour, view.fonts.time);
+  text_layer_set_font(view.layers.hour, view.fonts.primary);
   layer_add_child(window_layer, text_layer_get_layer(view.layers.hour));
   
   // Create and add the colon layer, I like my colon exactly in the middle
@@ -1093,7 +1093,7 @@ void main_window_load(Window *window) {
   text_layer_set_background_color(view.layers.colon, GColorClear);
   text_layer_set_text_color(view.layers.colon, config->color_accent);
   text_layer_set_text_alignment(view.layers.colon, GTextAlignmentCenter);
-  text_layer_set_font(view.layers.colon, view.fonts.time);
+  text_layer_set_font(view.layers.colon, view.fonts.primary);
   text_layer_set_text(view.layers.colon, ":");
   layer_add_child(window_layer, text_layer_get_layer(view.layers.colon));
   
@@ -1103,17 +1103,17 @@ void main_window_load(Window *window) {
   text_layer_set_background_color(view.layers.minute, GColorClear);
   text_layer_set_text_color(view.layers.minute, config->color_primary);
   text_layer_set_text_alignment(view.layers.minute, GTextAlignmentLeft);
-  text_layer_set_font(view.layers.minute, view.fonts.time);
+  text_layer_set_font(view.layers.minute, view.fonts.primary);
   layer_add_child(window_layer, text_layer_get_layer(view.layers.minute));
   
   // Create and add the top date layer
-  view.layers.date_top = layer_create(GRect(0, PBL_IF_ROUND_ELSE(118, 108), bounds.size.w, 24));
+  view.layers.date_top = layer_create(GRect(0, PBL_IF_ROUND_ELSE(112, 102), bounds.size.w, 30));
   LayerUpdateProc update_proc = config->date_format_top[0] == 'z' ? week_bar_monday_update_proc : config->date_format_top[0] == 'Z' ? week_bar_sunday_update_proc : date_top_update_proc;
   layer_set_update_proc(view.layers.date_top, update_proc);
   layer_add_child(window_layer, view.layers.date_top); 
     
   // Create and add the bottom date layer
-  view.layers.date_bottom = layer_create(GRect(0, PBL_IF_ROUND_ELSE(136, 126), bounds.size.w, 24));
+  view.layers.date_bottom = layer_create(GRect(0, PBL_IF_ROUND_ELSE(132, 122), bounds.size.w, 30));
   update_proc = config->date_format_bottom[0] == 'z' ? week_bar_monday_update_proc : config->date_format_bottom[0] == 'Z' ? week_bar_sunday_update_proc : date_bottom_update_proc;
   layer_set_update_proc(view.layers.date_bottom, update_proc);
   layer_add_child(window_layer, view.layers.date_bottom);
@@ -1155,9 +1155,8 @@ void main_window_unload(Window *window) {
   if (view.layers.moonphase) layer_destroy(view.layers.moonphase);
   if (view.layers.switcher) layer_destroy(view.layers.switcher);
   
-  // Unload GFonts
-  fonts_unload_custom_font(view.fonts.time);
-  fonts_unload_custom_font(view.fonts.weekday);
+  // Unload custom fonts
+  fonts_unload_custom_font(view.fonts.primary);
   fonts_unload_custom_font(view.fonts.icons);
   fonts_unload_custom_font(view.fonts.icons_small);
   fonts_unload_custom_font(view.fonts.icons_large);
