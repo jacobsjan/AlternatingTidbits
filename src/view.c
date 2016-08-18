@@ -18,6 +18,8 @@ struct Layers {
   TextLayer *minute;
   Layer *date_top;
   Layer *date_bottom;
+  
+  // Switcher
   Layer *switcher;
   
   // Alternating layers, only one visible at a time
@@ -28,6 +30,7 @@ struct Layers {
   #if defined(PBL_COMPASS)
   Layer *compass;
   #endif
+  Layer *moonphase;
   Layer *timezone;
   #if defined(PBL_HEALTH)
   Layer *health;
@@ -156,8 +159,12 @@ void error_update_proc(Layer *layer, GContext *ctx) {
       symbol = ICON_NO_WEATHER;
       text = " Weather issue";
       break; 
+    case ERROR_VIBRATION_OVERLOAD:
+      symbol = ICON_VIBRATION_OVERLOAD;
+      text = "Switcher pauze";
+      break; 
     default:
-      // Bleutooth ok once again alert
+      // Bluetooth ok once again alert
       symbol = ICON_BLUETOOTH;
       text = "Bluetooth ok";
       break; 
@@ -252,9 +259,24 @@ void sunrise_sunset_update_proc(Layer *layer, GContext *ctx) {
 }
 
 void battery_update_proc(Layer *layer, GContext *ctx) {
-  char* battery_icon = icons_get_battery_symbol(model->battery_charge, model->battery_charging, model->battery_plugged);
+  int battery_charge = model->battery_charge;
+  if (battery_charge == 0 && !model->battery_plugged) {
+    battery_charge = 5; 
+  } else if (battery_charge > 0 && model->battery_plugged) {
+    battery_charge += 30;
+  }
+  
+  char* battery_icon = icons_get_battery_symbol(battery_charge, model->battery_charging, model->battery_plugged);
   char charge[5];
-  snprintf(charge, sizeof(charge), "%d", model->battery_charge);
+  if (battery_charge == 0 && model->battery_plugged) {
+    charge[0] = '<';
+    charge[1] = ' ';
+    charge[2] = '4';
+    charge[3] = '0';
+    charge[4] = 0;
+  } else {
+    snprintf(charge, sizeof(charge), "%d", battery_charge);
+  }
   
   // Draw
   char *texts[] = { charge, "%" };
@@ -529,6 +551,16 @@ void health_update_proc(Layer *layer, GContext *ctx) {
   }
 }
 #endif
+
+void moonphase_update_proc(Layer *layer, GContext *ctx) {
+  char* moon_icon = icons_get_moonphase(model->moonphase);
+  char illumination[4];
+  snprintf(illumination, sizeof(illumination), "%d", model->moonillumination);
+  
+  // Draw
+  char *texts[] = { " ", NULL, illumination, "%"}; 
+  draw_centered(layer, ctx, moon_icon, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
+}
 
 void date_update_proc(Layer *layer, GContext *ctx, char* format) {
   int element_count = strlen(format);
@@ -870,7 +902,7 @@ void battery_changed() {
 
 #if defined(PBL_COMPASS)
 void compass_changed() {
-  if (view.layers.compass == NULL && (!config->compass_switcher_only || view.layers.switcher != NULL)) {    
+  if (view.layers.compass == NULL && config->enable_compass && (!config->compass_switcher_only || view.layers.switcher != NULL)) {    
     // Create compass layer
     Layer *window_layer = window_get_root_layer(view.window);
     GRect bounds = layer_get_bounds(window_layer);
@@ -944,6 +976,23 @@ void activity_changed() {
 }
 #endif
 
+void moonphase_changed() {
+  if (view.layers.moonphase == NULL && (!config->moonphase_night_only || !is_daytime())) {
+    // Create moonphase layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+    
+    view.layers.moonphase = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
+    layer_set_update_proc(view.layers.moonphase, moonphase_update_proc);
+    alternating_layers_add(view.layers.moonphase, icons_get_moonphase(120));
+  } else if (view.layers.moonphase != NULL && (config->moonphase_night_only && is_daytime())) {
+    // Destroy moonphase layer
+    alternating_layers_remove(view.layers.moonphase);
+    layer_destroy(view.layers.moonphase);
+    view.layers.moonphase = NULL;
+  }
+}
+
 void switcher_changed() {
   // Make sure the layer exists
   if (model->switcher && view.layers.switcher == NULL) {
@@ -987,7 +1036,7 @@ void switcher_changed() {
 
 static void switcher_animation_update(Animation *animation, const AnimationProgress progress) {
   view.switcher_animation_progress = progress;
-  layer_mark_dirty(view.layers.switcher);
+  if (view.layers.switcher) layer_mark_dirty(view.layers.switcher);
 }
 
 static void switcher_animation_teardown(Animation *animation) {
@@ -1092,7 +1141,6 @@ void main_window_unload(Window *window) {
   text_layer_destroy(view.layers.minute);
   layer_destroy(view.layers.date_top);
   layer_destroy(view.layers.date_bottom);
-  if (view.layers.switcher) layer_destroy(view.layers.switcher);
   if (view.layers.battery) layer_destroy(view.layers.battery);
   #if defined(PBL_COMPASS)
   if (view.layers.compass) layer_destroy(view.layers.compass);
@@ -1104,6 +1152,8 @@ void main_window_unload(Window *window) {
   #if defined(PBL_HEALTH)
   if (view.layers.health) layer_destroy(view.layers.health);
   #endif
+  if (view.layers.moonphase) layer_destroy(view.layers.moonphase);
+  if (view.layers.switcher) layer_destroy(view.layers.switcher);
   
   // Unload GFonts
   fonts_unload_custom_font(view.fonts.time);
@@ -1111,6 +1161,9 @@ void main_window_unload(Window *window) {
   fonts_unload_custom_font(view.fonts.icons);
   fonts_unload_custom_font(view.fonts.icons_small);
   fonts_unload_custom_font(view.fonts.icons_large);
+  
+  // Unsubscribe from compass events
+  if (view.compass_subscribed) compass_service_unsubscribe();
 }
 
 void view_init() { 
@@ -1146,6 +1199,7 @@ void view_init() {
   #if defined(PBL_HEALTH)
   if (config->enable_health) model->events.on_activity_change = activity_changed;
   #endif
+  if (config->enable_moonphase) model->events.on_moonphase_change = moonphase_changed;
   
   // Initialize some layers
   if (model->error != ERROR_NONE) error_changed(ERROR_NONE);

@@ -157,6 +157,8 @@ Pebble.addEventListener('appmessage', function(e) {
     console.log('Received message: ' + JSON.stringify(e.payload));
     if (e.payload.Fetch) {
         fetchLocation();
+    } else if (e.payload.FetchMoonphase) {
+        fetchMoonphase();
     }
 });
 
@@ -265,4 +267,15 @@ function fetchWeather(loc) {
             'Err': constants.WEATHER_ERROR,
         });
     }
+}
+
+function fetchMoonphase() {
+  var moonphase = require('./moonphase');  
+  var mp = moonphase();
+  console.log('Moon phase: ' + mp.phase + ", illumination: " + mp.illumination);
+  
+  sendMessage({
+    'Moonphase': mp.phase,
+    'Moonillumination': mp.illumination
+  });
 }

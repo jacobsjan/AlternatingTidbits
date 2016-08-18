@@ -27,6 +27,7 @@ struct Config {
   #if defined(PBL_HEALTH)
   bool enable_health;
   #endif
+  bool enable_moonphase;
   bool enable_sun;
   bool enable_weather;
   char alternate_mode;
@@ -58,6 +59,8 @@ struct Config {
   enum HealthIndicator health_sleep_middle;
   enum HealthIndicator health_sleep_bottom;
   #endif
+  
+  bool moonphase_night_only;
   
   int weather_refresh;
 };

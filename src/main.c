@@ -4,6 +4,7 @@
 #include "model.h"
 #include "view.h"
 #include "storage.h"
+#include "messagequeue.h"
 
 #define FETCH_RETRIES 5
 bool js_ready = false;
@@ -40,21 +41,21 @@ static inline bool is_asleep() {
 static bool fetch_weather() {
   // Check configuration of weather/sunrise/sunset, bluetooth connection, JS Ready and sleeping
   if ((config->enable_sun || config->enable_weather) && connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
-    // Bluetooth connected, prepare outgoing message
-    DictionaryIterator *iter;
-    AppMessageResult result = app_message_outbox_begin(&iter);
-    if(result == APP_MSG_OK) { // Message could not be prepared
-      // Send outgoing message
-      Tuplet value = TupletInteger(MESSAGE_KEY_Fetch, 1);
-      dict_write_tuplet(iter, &value);
-      dict_write_end(iter);
-      
-      result = app_message_outbox_send();
-    }
-    
-    return result == APP_MSG_OK;
+    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fetch, 1));    
+    return true;
   } else {
     // Did not fetch weather
+    return false;
+  }
+}
+
+static bool fetch_moonphase() {  
+  // Check configuration of moonphase, bluetooth connection, JS Ready 
+  if (config->enable_moonphase && connection_service_peek_pebble_app_connection() && js_ready) {
+    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchMoonphase, 1));    
+    return true;
+  } else {
+    // Did not fetch moonphase
     return false;
   }
 }
@@ -63,9 +64,13 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   // Handle and incoming message from the phone
   Tuple *tuple = dict_find(iter, MESSAGE_KEY_JSReady);
   if(tuple) {
-        js_ready = true;
-        // Watch is ready for communication, is weather fetch wanted?  
-        fetch_weather();
+    js_ready = true;
+    
+    // Watch is ready for communication, is weather fetch wanted?  
+    fetch_weather();
+    
+    // Is moonphase fetch wanted?
+    fetch_moonphase();
   }
   
   // Weather
@@ -96,6 +101,16 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     }
   } 
   
+  // Moonphase
+  bool moonChanged = false;
+  int moonphase = 0;
+  int moonillumination = 0;
+  tuple = dict_find(iter, MESSAGE_KEY_Moonphase);
+  if(tuple && (moonChanged = true)) moonphase = tuple->value->int32;
+  tuple = dict_find(iter, MESSAGE_KEY_Moonillumination);
+  if(tuple && (moonChanged = true)) moonillumination = tuple->value->int32;
+  if (moonChanged) model_set_moon(moonphase, moonillumination);
+  
   // Configuration
   bool cfgChanged = parse_configuration_messages(iter);    
   if (cfgChanged) {
@@ -109,8 +124,9 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     view_deinit();
     view_init();
     
-    // Refetch weather in case weather settings were changed
+    // Refetch weather and moonphase in case settings were changed
     fetch_weather();
+    fetch_moonphase();
   }
 }
 
@@ -246,6 +262,9 @@ void update_health() {
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   if (units_changed & MINUTE_UNIT) {
+    // Send unsent messages
+    message_queue_send_next();
+    
     // Update weather
     weather_fetch_countdown--;
     if (weather_fetch_countdown <= -FETCH_RETRIES) {
@@ -278,6 +297,9 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     if (!is_asleep() && config->vibrate_hourly) {
       vibes_short_pulse();
     }
+    
+    // Refresh moonphase if required
+    fetch_moonphase();
   }
 }
 
@@ -303,8 +325,26 @@ static void battery_handler(BatteryChargeState charge) {
   model_set_battery(charge.charge_percent, charge.is_charging, charge.is_plugged);
 }
 
+void switcher_timeout_callback(void *data) {
+  if (model->error != ERROR_VIBRATION_OVERLOAD) { 
+      // Unsubscribe from accelerator data
+    accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
+    accel_data_service_unsubscribe();
+    
+    // De-activate the switcher 
+    model_set_switcher(false); 
+  } else {  
+    // Reset vibration overload error
+    model_set_error(ERROR_NONE);
+  }
+  
+  switcher_timer = NULL;
+}
+
 void accel_handler(AccelData *data, uint32_t num_samples) {
   // Detect minor taps
+  int num_calm = 0;
+  bool tapped = false;
   for (uint32_t i = 0; i < num_samples - 1; ++i) {
     int xDiff = abs(data[i + 1].x - data[i].x);
     int yDiff = abs(data[i + 1].y - data[i].y);
@@ -315,39 +355,57 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
       tapping = true; // tap started
     } else if (diff < 50 && tapping) {
       tapping = false; // tap ended
-      
-      // Signal tap detected
-      model_signal_tap();
-      
-      // Prolong switcher
-      if (switcher_timer) app_timer_reschedule(switcher_timer, 30000);
+      tapped = true;
     }
+    
+    if (diff < 50) ++num_calm;
   }
-}
-
-void switcher_timeout_callback(void *data) {
-  // Unsubscribe from accelerator data
-  accel_data_service_unsubscribe();
   
-  // De-activate the switcher 
-  model_set_switcher(false); 
-  switcher_timer = NULL;
+  if (num_calm == 0) {
+    // Too many vibrations, turn off switcher to avoid battery draining
+    if (switcher_timer) app_timer_cancel(switcher_timer);
+    switcher_timeout_callback(NULL);
+    
+    // Set error
+    model_set_error(ERROR_VIBRATION_OVERLOAD);
+    
+    // Timeout error after 15sec
+    switcher_timer = app_timer_register(15000, switcher_timeout_callback, NULL);
+  } else if (tapped) {
+    // Signal tap detected
+    model_signal_tap();
+
+    // Prolong switcher
+    if (switcher_timer) app_timer_reschedule(switcher_timer, 30000);
+  }
 }
 
 static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
-  if (axis == ACCEL_AXIS_Y && !model->switcher && config->alternate_mode != 'M') {
-    // Activate the switcher
-    model_set_switcher(true);
-  
-    // Subscribe to accelerator data to detect minor taps
-    accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
-    accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
-    tapping = false;
+  if (!model->switcher && config->alternate_mode != 'M') {
+    // Check whether not vibrating
+    AccelData accel_data;
+    accel_service_peek(&accel_data);
+    if (!accel_data.did_vibrate) {
+      // Check whether not in vibration overload
+      if (model->error != ERROR_VIBRATION_OVERLOAD) { 
+        // Activate the switcher
+        model_set_switcher(true);
     
-    // Deactivate switcher after 30sec
-    if (switcher_timer) app_timer_cancel(switcher_timer);
-    switcher_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
-  }
+        // Subscribe to accelerator data to detect minor taps
+        accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
+        accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
+        tapping = false;
+      
+        // Deactivate switcher after 30sec
+        if (switcher_timer) app_timer_cancel(switcher_timer);
+        switcher_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
+      } else {
+        // Prolong vibration overload
+        if (switcher_timer) app_timer_cancel(switcher_timer);
+        switcher_timer = app_timer_register(15000, switcher_timeout_callback, NULL);
+      }
+    }
+  } 
 }
 
 #if defined(PBL_HEALTH)
@@ -359,20 +417,26 @@ void health_init() {
     persist_read_data(STORAGE_HEALTH_ACTIVITY_START, &saved_activity_start, sizeof(saved_activity_start));
     
     // Validate that the activity is still ongoing
+    bool resume = false;
+    int duration_since_start = (time(NULL) - saved_activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
     if (saved_activity == ACTIVITY_SLEEP) {
       // Are we still sleeping?
       if (is_asleep()) {
         // Yep, resume activity
-        model_set_activity(saved_activity);
-        activity_start = saved_activity_start; 
+        resume = true;
       }
     } else if (saved_activity == ACTIVITY_WALK || saved_activity == ACTIVITY_RUN) {
       // Is the average #steps since saved activity start greater than the threshold?
-      int duration_since_start = (time(NULL) - saved_activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
       int steps_since_start = (int)health_service_sum_today(HealthMetricStepCount) - saved_activity_start.totalStepCount;
       int avg_steps_per_minute = steps_since_start / duration_since_start;
       if (avg_steps_per_minute >= (saved_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
         // Yep, resume activity
+        resume = true;
+      }
+    }
+    
+    // Resume activity
+    if (resume) {
         activity_start = saved_activity_start; 
         
         int calories = (int)health_service_sum_today(HealthMetricActiveKCalories) - activity_start.totalCalories;
@@ -383,7 +447,6 @@ void health_init() {
         // Update the model
         model_set_activity_counters(calories, duration, distance, step_count);
         model_set_activity(saved_activity);
-      }
     }
   }
 }
@@ -415,6 +478,8 @@ static void app_init() {
   const uint32_t inbox_size = 640;
   const uint32_t outbox_size = 64;
   app_message_register_inbox_received(&msg_received_handler);
+  app_message_register_outbox_sent(&message_queue_sent_handler);
+  app_message_register_outbox_failed(&message_queue_failed_handler);
   app_message_open(inbox_size, outbox_size);
   
   // Register with TickTimerService

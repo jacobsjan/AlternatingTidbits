@@ -56,6 +56,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHealth);
   if(tuple && (cfgChanged = true)) config->enable_health = tuple->value->int8;
   #endif
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableMoonphase);
+  if(tuple && (cfgChanged = true)) config->enable_moonphase = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableSun);
   if(tuple && (cfgChanged = true)) config->enable_sun = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableWeather);
@@ -117,6 +119,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->health_sleep_bottom = tuple->value->int32;
   #endif 
   
+  // Moonphase
+  tuple = dict_find(iter, MESSAGE_KEY_cfgMoonphaseNightOnly);
+  if(tuple && (cfgChanged = true)) config->moonphase_night_only = tuple->value->int8;
+  
   // Weather
   tuple = dict_find(iter, MESSAGE_KEY_cfgWeatherRefresh);
   if(tuple && (cfgChanged = true)) config->weather_refresh = tuple->value->int32;
@@ -151,6 +157,7 @@ void config_init() {
     #if defined(PBL_HEALTH)
     config->enable_health = true;
     #endif
+    config->enable_moonphase = true;
     config->enable_sun = true;
     config->enable_weather = true;
     config->alternate_mode = 'B';
@@ -179,6 +186,8 @@ void config_init() {
     config->health_sleep_middle = HEALTH_EMPTY;
     config->health_sleep_bottom = HEALTH_TIME_TOTAL_SLEEP;
     #endif
+    
+    config->moonphase_night_only = true;
     
     config->weather_refresh = 30; 
   }

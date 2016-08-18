@@ -128,7 +128,7 @@ module.exports = [
       },
       { 
         "type": "text", 
-        "defaultValue": "Select the tidbits of info to alternate between every minute." 
+        "defaultValue": "Select the tidbits of information to alternate between." 
       },
       {
         "type": "toggle",
@@ -160,6 +160,12 @@ module.exports = [
         "label": "Health",
         "defaultValue": true,
         "capabilities": ["HEALTH"]
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableMoonphase",
+        "label": "Moonphase",
+        "defaultValue": true
       },
       {
         "type": "toggle",
@@ -250,7 +256,7 @@ module.exports = [
         "type": "toggle",
         "messageKey": "cfgCompassSwitcherOnly",
         "label": "Only availble via switcher",
-        "description": "As the compass drains a lot of battery, it is strongly recommended to make it only accessible via the switcher.",
+        "description": "As the compass drains the battery quickly, it is strongly recommended to make it only accessible via the switcher.",
         "defaultValue": true
       }
     ]
@@ -1006,6 +1012,25 @@ module.exports = [
             "value": constants.TIME_TOTAL_SLEEP 
           }
         ]
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Moonphase"
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "The phase and illumination are shown."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgMoonphaseNightOnly",
+        "label": "Show only at night",
+        "defaultValue": true
       }
     ]
   },

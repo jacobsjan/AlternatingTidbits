@@ -112,3 +112,38 @@ char* icons_get_compass(int degrees) {
   }
 }
 #endif
+
+char* icons_get_moonphase(int degrees) {
+  int phase = ((360 + 180 - degrees + 13) % 360) * 28 / 360;
+  switch(phase) {
+    case  1: return "\uf0c5";
+    case  2: return "\uf0c6";
+    case  3: return "\uf0c7";
+    case  4: return "\uf0c8";
+    case  5: return "\uf0c9";
+    case  6: return "\uf0ca";
+    case  7: return "\uf0cb";
+    case  8: return "\uf0cc";
+    case  9: return "\uf0cd";
+    case 10: return "\uf0ce";
+    case 11: return "\uf0cf";
+    case 12: return "\uf0d0";
+    case 13: return "\uf0d1";
+    case 14: return "\uf0d2";
+    case 15: return "\uf0d3";
+    case 16: return "\uf0d4";
+    case 17: return "\uf0d5";
+    case 18: return "\uf0d6";
+    case 19: return "\uf0d7";
+    case 20: return "\uf0d8";
+    case 21: return "\uf0d9";
+    case 22: return "\uf0da";
+    case 23: return "\uf0db";
+    case 24: return "\uf0dc";
+    case 25: return "\uf0dd";
+    case 26: return "\uf0de";
+    case 27: return "\uf0df";
+    default:
+    case  0: return "\uf0c4";
+  }
+}

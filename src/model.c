@@ -90,6 +90,15 @@ void model_set_activity_counters(int calories, int duration, int distance, int s
 }
 #endif
 
+void model_set_moon(int moonphase, int moonillumination) {
+  model->moonphase = moonphase;
+  model->moonillumination = moonillumination;
+    
+  if (model->events.on_moonphase_change) {
+    model->events.on_moonphase_change();
+  }
+}
+
 void model_set_switcher(bool active) {
   model->switcher = active;
       
