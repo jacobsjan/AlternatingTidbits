@@ -1,6 +1,9 @@
 #pragma once
 #include<pebble.h>
 
+// In wait of SDK 4.0
+#define PBL_COMPASS
+
 enum WeatherCondition {
   CONDITION_CLEAR = 0,
   CONDITION_CLOUDY,
@@ -58,11 +61,25 @@ enum HealthIndicator {
   HEALTH_TIME_DEEP_SLEEP,
   HEALTH_TIME_TOTAL_SLEEP,
   HEALTH_AVG_TIME_DEEP_SLEEP,
-  HEALTH_AVG_TIME_TOTAL_SLEEP
+  HEALTH_AVG_TIME_TOTAL_SLEEP,
+  HEALTH_CLIMB_DESCEND,
 };
 #endif
 
+enum ModelUpdates {
+  UPDATE_FLICKS = 1 << 0,
+  UPDATE_TAPS = 1 << 1,
+  UPDATE_ALTITUDE = 1 << 2,
+  UPDATE_COMPASS = 1 << 3,
+  UPDATE_MOONPHASE = 1 << 4,
+  UPDATE_WEATHER = 1 << 5,
+  UPDATE_SUN = 1 << 6,
+  UPDATE_BATTERY = 1 << 7,
+  UPDATE_HEALTH = 1 << 8,
+};
+
 struct ModelEvents {
+  void (*on_update_req_change)(enum ModelUpdates prev_req);
   void (*on_error_change)(enum ErrorCodes prevError);
   void (*on_time_change)();
   void (*on_weather_condition_change)();
@@ -70,22 +87,31 @@ struct ModelEvents {
   void (*on_sunrise_change)();
   void (*on_sunset_change)();
   void (*on_battery_change)();
+  #if defined(PBL_COMPASS)
+  void (*on_compass_heading_change)();
+  #endif
   #if defined(PBL_HEALTH)
   void (*on_activity_change)();
   void (*on_activity_counters_change)();
   #endif
   void (*on_moonphase_change)();
-  void (*on_switcher_change)();
+  void (*on_altitude_change)();
+  
+  void (*on_flick)();
   void (*on_tap)();
 };
 
 struct Model {
+  enum ModelUpdates update_req;
   enum ErrorCodes error;
   struct tm *time;
   enum WeatherCondition weather_condition;
   int weather_temperature;
   int sunrise;
   int sunset;
+  #if defined(PBL_COMPASS)
+  CompassHeadingData compass_heading;
+  #endif
   uint8_t battery_charge;
   bool battery_charging;
   bool battery_plugged;
@@ -95,14 +121,18 @@ struct Model {
   int activity_duration;
   int activity_distance;
   int activity_step_count;
+  int activity_climb;
+  int activity_descend;
   #endif
   int moonphase;
   int moonillumination;
-  bool switcher;
+  int altitude;
   
   struct ModelEvents events;
 };
 
+void model_add_update_req(enum ModelUpdates requirements);
+void model_remove_update_req(enum ModelUpdates requirements);
 void model_reset_events();
 
 void model_set_error(enum ErrorCodes error);
@@ -112,12 +142,17 @@ void model_set_weather_temperature(int weather_temperature);
 void model_set_sunrise(int sunrise);
 void model_set_sunset(int sunset);
 void model_set_battery(uint8_t charge, bool charging, bool plugged);
+#if defined(PBL_COMPASS)
+void model_set_compass_heading(CompassHeadingData compass_heading);
+#endif
 #if defined(PBL_HEALTH)
 void model_set_activity(enum Activities activity);
-void model_set_activity_counters(int calories, int duration, int distance, int step_count);
+void model_set_activity_counters(int calories, int duration, int distance, int step_count, int climb, int descend);
 #endif
 void model_set_moon(int moonphase, int moonillumination);
-void model_set_switcher(bool active);
+void model_set_altitude(int altitude);
+
+void model_signal_flick();
 void model_signal_tap();
 
 extern struct Model* model;

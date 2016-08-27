@@ -44,6 +44,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   // Enabling tidbits
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableTimezone);
   if(tuple && (cfgChanged = true)) config->enable_timezone = tuple->value->int8; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableAltitude);
+  if(tuple && (cfgChanged = true)) config->enable_altitude = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableBattery);
   if(tuple && (cfgChanged = true)) config->enable_battery = tuple->value->int8;
   #if defined(PBL_COMPASS) 
@@ -70,6 +72,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple) config->timezone_offset = tuple->value->int32; // Timezone offset updates on itself are not considered configuration changes
   tuple = dict_find(iter, MESSAGE_KEY_cfgTimeZoneCity);
   if(tuple && (cfgChanged = true)) strncpy(config->timezone_city, tuple->value->cstring, sizeof(config->timezone_city));  
+  
+  // Altitude
+  tuple = dict_find(iter, MESSAGE_KEY_cfgAltitudeUnits);
+  if(tuple && (cfgChanged = true)) config->altitude_unit = tuple->value->cstring[0]; 
   
   // Battery
   tuple = dict_find(iter, MESSAGE_KEY_cfgBatteryShowFrom);
@@ -148,7 +154,14 @@ void config_init() {
     config->vibrate_bluetooth = true;
     config->vibrate_hourly = false;
     
+    config->altitude_unit = 'M';
+    #if defined(PBL_HEALTH)
+    config->health_distance_unit = 'M';
+    config->health_number_format = 'M';
+    #endif
+    
     config->enable_timezone = false;
+    config->enable_altitude = false;
     config->enable_battery = true;
     #if defined(PBL_COMPASS)
     config->enable_compass = true;
@@ -160,7 +173,7 @@ void config_init() {
     config->enable_moonphase = true;
     config->enable_sun = true;
     config->enable_weather = true;
-    config->alternate_mode = 'B';
+    config->alternate_mode = 'B';    
     
     config->battery_show_from = 100;
     config->battery_accent_from = 30;
@@ -171,8 +184,6 @@ void config_init() {
       
     #if defined(PBL_HEALTH)
     config->health_stick = true;
-    config->health_distance_unit = 'M';
-    config->health_number_format = 'M';
     config->health_normal_top = HEALTH_EMPTY;
     config->health_normal_middle = HEALTH_EMPTY;
     config->health_normal_bottom = HEALTH_TODAY_STEPS;

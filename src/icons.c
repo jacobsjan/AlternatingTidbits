@@ -1,7 +1,6 @@
 #include <pebble.h>
 
 #include "model.h"
-#include "config.h"
 
 //IDs from http://openweathermap.org/weather-conditions
 //Icons from http://erikflowers.github.io/weather-icons/
@@ -114,7 +113,7 @@ char* icons_get_compass(int degrees) {
 #endif
 
 char* icons_get_moonphase(int degrees) {
-  int phase = ((360 + 180 - degrees + 13) % 360) * 28 / 360;
+  int phase = ((360 + 180 - degrees + 6) % 360) * 28 / 360;
   switch(phase) {
     case  1: return "\uf0c5";
     case  2: return "\uf0c6";

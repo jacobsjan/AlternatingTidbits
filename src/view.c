@@ -4,6 +4,8 @@
 #include "model.h"
 #include "icons.h"
 
+void evaluate_moonphase_req();
+
 enum SuspensionReasons {
   SUSPENSION_NONE = 0,
   SUSPENSION_ERROR_ALERT = 1,
@@ -23,18 +25,19 @@ struct Layers {
   Layer *switcher;
   
   // Alternating layers, only one visible at a time
-  Layer *error;
-  Layer *weather;
-  Layer *sunrise_sunset;
+  Layer *timezone;
+  Layer *altitude;
   Layer *battery;
   #if defined(PBL_COMPASS)
   Layer *compass;
   #endif
-  Layer *moonphase;
-  Layer *timezone;
+  Layer *error;
   #if defined(PBL_HEALTH)
   Layer *health;
   #endif
+  Layer *moonphase;
+  Layer *sunrise_sunset;
+  Layer *weather;
 };
 
 struct Fonts {
@@ -63,11 +66,8 @@ struct View {
   // Alert info
   AppTimer *alert_timeout_handler;
   
-  // Compass info
-  bool compass_subscribed;
-  CompassHeadingData compass_heading_data;
-  
-  // Switcher animation
+  // Switcher 
+  AppTimer* switcher_timeout_timer;
   Animation* switcher_animation;
   AnimationProgress switcher_animation_progress;
 };
@@ -258,6 +258,38 @@ void sunrise_sunset_update_proc(Layer *layer, GContext *ctx) {
   draw_centered(layer, ctx, symbol, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
+void altitude_update_proc(Layer *layer, GContext *ctx) { 
+  static char before_point[4];
+  static char after_point[4];
+  char **texts;
+  
+  int metric = model->altitude;
+  if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
+  if (metric < 1000) {
+    snprintf(before_point, sizeof(before_point), "%d", metric);
+    if (config->altitude_unit == 'M') {
+      static char *temp[] = { before_point,  "m", NULL, NULL };
+      texts = temp;
+    } else {
+      static char *temp[] = { before_point,  "ft", NULL, NULL };
+      texts = temp;
+    }
+  } else {
+    snprintf(before_point, sizeof(before_point), "%d", metric / 1000);
+    snprintf(after_point, sizeof(after_point), "%03d", metric % 1000);
+    if (config->altitude_unit == 'M') {
+      static char *temp[] = { before_point, ".", after_point, "m" };
+      texts = temp;
+    } else {
+      static char *temp[] = { before_point, ".", after_point, "ft" };
+      texts = temp;
+    }
+  }   
+  
+  // Draw
+  draw_centered(layer, ctx, ICON_ALTITUDE, config->color_secondary, 4, texts);
+}
+
 void battery_update_proc(Layer *layer, GContext *ctx) {
   int battery_charge = model->battery_charge;
   if (battery_charge == 0 && !model->battery_plugged) {
@@ -275,45 +307,26 @@ void battery_update_proc(Layer *layer, GContext *ctx) {
     charge[3] = '0';
     charge[4] = 0;
   } else {
-    snprintf(charge, sizeof(charge), "%d", battery_charge);
+    snprintf(charge, sizeof(charge) / sizeof(charge[0]), "%d", battery_charge);
   }
   
   // Draw
   char *texts[] = { charge, "%" };
-  GColor battery_color = model->battery_charge <= config->battery_accent_from ? config->color_accent : config->color_secondary;
+  GColor battery_color = battery_charge <= config->battery_accent_from ? config->color_accent : config->color_secondary;
   draw_centered(layer, ctx, battery_icon, battery_color, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
 #if defined(PBL_COMPASS)
-static void compass_heading_updated(CompassHeadingData heading) {
-  // Update heading data
-  view.compass_heading_data = heading;
-    
-  // Update layer or unsubscribe if it's no longer visible
-  if (view.layers.compass == NULL || view.alt_layers[view.alt_layer_visible] != view.layers.compass) {
-    // Unsubscribe from compass events
-    if (view.compass_subscribed) {
-      compass_service_unsubscribe();
-      view.compass_subscribed = false;
-    }
-  } else {
-    // Redraw the compass
-    layer_mark_dirty(view.layers.compass);
-  }
-}
-
 static void compass_update_proc(Layer *layer, GContext *ctx) {    
-  if (!view.compass_subscribed) {
-    // Subscribe to compass heading updates
-    compass_service_subscribe(&compass_heading_updated);
-    compass_service_set_heading_filter(TRIG_MAX_ANGLE / 32);
-    view.compass_subscribed = true;  
+  // Subscribe to compass heading updates, unsubscibe in compass_heading_changed
+  if (!(model->update_req & UPDATE_COMPASS)) {
+    model_add_update_req(UPDATE_COMPASS);
   }
   
-  // Read heading
+  // Decide on compass icon
   char* icon;
-  if (view.compass_heading_data.compass_status != CompassStatusDataInvalid) {
-    int degrees = TRIGANGLE_TO_DEG(view.compass_heading_data.magnetic_heading);
+  if (model->compass_heading.compass_status != CompassStatusDataInvalid) {
+    int degrees = TRIGANGLE_TO_DEG(model->compass_heading.magnetic_heading);
     icon = icons_get_compass(degrees);
   } else {
     icon = ICON_COMPASS_ROTATE;
@@ -451,6 +464,16 @@ char** health_generate_texts(enum HealthIndicator indicator) {
       result[1] = alloc_print_s(config->health_number_format == 'M' ? "," : ".");
       result[2] = alloc_print_d("%d", ((dist_per_hour + 50) % 1000) / 100);
       result[3] = alloc_print_s(config->health_distance_unit == 'M' ? "km/h" : "mi/h");
+      break;
+    case HEALTH_CLIMB_DESCEND:
+      metric = model->activity_climb;
+      if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
+      result[0] = alloc_print_d("%d", metric);
+      result[1] = alloc_print_s("|");
+      metric = model->activity_descend;
+      if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
+      result[2] = alloc_print_d("%d", metric);
+      result[3] = alloc_print_s(config->altitude_unit == 'M' ? "m" : "ft");
       break;
   }
   return result;
@@ -657,12 +680,12 @@ void week_bar_update_proc(Layer* layer, GContext* ctx, bool start_with_monday) {
     // Draw marker
     if (j == model->time->tm_wday) {
       graphics_context_set_fill_color(ctx, config->color_accent);
-      GRect draw_bounds = GRect(day_left + 1, bounds.origin.y + day_size.h + 2, day_size.w - space_size.w - 2, 3);
+      GRect draw_bounds = GRect(day_left + 1, bounds.origin.y + day_size.h + 8, day_size.w - space_size.w - 2, 3);
       graphics_fill_rect(ctx, draw_bounds, 0, GCornerNone);
     }
     
     // Draw text
-    GRect draw_bounds = GRect(day_left, bounds.origin.y, day_size.w, day_size.h);
+    GRect draw_bounds = GRect(day_left, bounds.origin.y + 6, day_size.w, day_size.h);
     graphics_context_set_text_color(ctx, config->color_secondary);
     graphics_draw_text(ctx, day_text, font, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
     
@@ -787,7 +810,16 @@ void alternating_layers_remove(Layer* layer) {
   }
   
   // Was layer found?
-  if (index < view.alt_layer_count) {
+  if (index < view.alt_layer_count) {    
+    // Make sure the layer is no longer shown
+    if (view.alt_layer_visible == index) {
+      if (view.alt_layer_count > 1) {
+        alternating_layers_show((index + 1) % view.alt_layer_count);  
+      } else {
+        alternating_layers_show(-1);
+      }
+    } 
+    
     // Decrease layer count
     view.alt_layer_count--;   
     
@@ -797,64 +829,14 @@ void alternating_layers_remove(Layer* layer) {
       view.alt_layer_icons[i] = view.alt_layer_icons[i + 1];
     } 
     
-    // Make sure the layer is no longer shown
-    if (view.alt_layer_visible == index) {
-      alternating_layers_show(index - 1);      
-    } 
-  } 
-}
-
-static void alert_timeout_handler(void *context) {
-  // Clear the suspension
-  view.suspension_reason &= ~SUSPENSION_ERROR_ALERT;
-  
-  // Show the layer hidden by the alert when not in the switcher
-  if (!(view.suspension_reason & SUSPENSION_SWITCHER)) alternating_layers_show(view.suspension_return_layer);
-  
-  // Deregister timeout handler
-  view.alert_timeout_handler = NULL;
+    // Decrease visible layer index
+    if (view.alt_layer_visible >= index) {
+      view.alt_layer_visible--;
+    }
     
-  // Remove error layer when no longer in error or when errors are disabled
-  if (model->error == ERROR_NONE || !config->enable_error) {
-    alternating_layers_remove(view.layers.error);
-    layer_destroy(view.layers.error);
-    view.layers.error = NULL;
-  }
-}
-
-void error_changed(enum ErrorCodes prevError) {
-  // Check if error layer is allready visible
-  if (view.layers.error == NULL) {
-    // Create error layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-
-    view.layers.error = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.error, error_update_proc);
-    alternating_layers_add(view.layers.error, ICON_BLUETOOTH);
-  }
-  
-  // Set suspension
-  if (!(view.suspension_reason & SUSPENSION_ERROR_ALERT)) {
-    view.suspension_reason |= SUSPENSION_ERROR_ALERT;
-    view.suspension_return_layer = view.alt_layer_visible;
-  }
-  
-  // Show error layer
-  alternating_layers_show_layer(view.layers.error);
-  
-  // Cancel previous timeout if there is one
-  if (view.alert_timeout_handler) {
-    app_timer_cancel(view.alert_timeout_handler);
-  }
-  
-  if (model->error == ERROR_NONE && prevError != ERROR_CONNECTION) {
-    // Stop suspending for alert
-    alert_timeout_handler(NULL);
-  } else {
-    // Shedule timeout handler to stop suspending for alert
-    view.alert_timeout_handler = app_timer_register(15000, alert_timeout_handler, NULL); // Show as an alert for 15 seconds
-  }
+    // Update switcher if active
+    if (view.layers.switcher) layer_mark_dirty(view.layers.switcher);
+  } 
 }
 
 void time_changed() {
@@ -881,6 +863,35 @@ void time_changed() {
     // Not on suspension, alternate layer
     alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
   }
+  
+  // Check visibility of moonphase based on day or night time
+  if (config->enable_moonphase) evaluate_moonphase_req();
+}
+
+void evaluate_altitude_req() {
+  if (config->enable_altitude 
+#if defined(PBL_HEALTH)
+      || (model->activity == ACTIVITY_WALK && (config->health_walk_top == HEALTH_CLIMB_DESCEND || config->health_walk_middle == HEALTH_CLIMB_DESCEND || config->health_walk_bottom == HEALTH_CLIMB_DESCEND)) 
+      || (model->activity == ACTIVITY_RUN && (config->health_run_top == HEALTH_CLIMB_DESCEND || config->health_run_middle == HEALTH_CLIMB_DESCEND || config->health_run_bottom == HEALTH_CLIMB_DESCEND)) 
+#endif
+     ) {
+    model_add_update_req(UPDATE_ALTITUDE);
+  } else {
+    model_remove_update_req(UPDATE_ALTITUDE);
+  }
+}
+
+void altitude_changed() {
+  if (view.layers.altitude == NULL) {
+    // Create altitude layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+    
+    view.layers.altitude = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
+    layer_set_update_proc(view.layers.altitude, altitude_update_proc);
+    alternating_layers_add(view.layers.altitude, ICON_ALTITUDE);
+  } 
+  
 }
 
 void battery_changed() {
@@ -901,7 +912,18 @@ void battery_changed() {
 }
 
 #if defined(PBL_COMPASS)
-void compass_changed() {
+void compass_heading_changed() {
+  // Update layer or unsubscribe if it's no longer visible
+  if (view.layers.compass == NULL || view.alt_layers[view.alt_layer_visible] != view.layers.compass) {
+    // Unsubscribe from compass events, subscibe in compass_update_proc
+    model_remove_update_req(UPDATE_COMPASS);
+  } else {
+    // Redraw the compass
+    layer_mark_dirty(view.layers.compass);
+  }
+}
+
+void compass_enable_changed() {
   if (view.layers.compass == NULL && config->enable_compass && (!config->compass_switcher_only || view.layers.switcher != NULL)) {    
     // Create compass layer
     Layer *window_layer = window_get_root_layer(view.window);
@@ -911,11 +933,8 @@ void compass_changed() {
     layer_set_update_proc(view.layers.compass, compass_update_proc);
     alternating_layers_add(view.layers.compass, icons_get_compass(0)); 
   } else if (view.layers.compass != NULL && (config->compass_switcher_only && view.layers.switcher == NULL)) {
-    // Unsubscribe from compass events
-    if (view.compass_subscribed) {
-      compass_service_unsubscribe();
-      view.compass_subscribed = false;
-    }
+    // Unsubscribe from compass events, subsbribe in compass_update_proc
+    model_remove_update_req(UPDATE_COMPASS);
     
     // Destroy compass layer
     alternating_layers_remove(view.layers.compass);
@@ -964,20 +983,38 @@ void activity_changed() {
   
   // Suspend alternating when walking, running or sleeping
   if (config->health_stick) {
-      if (model->activity == ACTIVITY_NORMAL) {
+    if (model->activity == ACTIVITY_NORMAL) {
       // Stop suspending alternating layers
       view.suspension_reason &= ~SUSPENSION_ACTIVITY;
     } else {
       // Suspend alternating layers and show health layer
       view.suspension_reason |= SUSPENSION_ACTIVITY;
-      alternating_layers_show_layer(view.layers.health);
+      if (!view.layers.switcher) alternating_layers_show_layer(view.layers.health);
     }
   }
+  
+  // Enable/disable altitude polling
+  evaluate_altitude_req();
 }
 #endif
 
+void evaluate_moonphase_req() {
+  if (!config->moonphase_night_only || !is_daytime()) {
+    model_add_update_req(UPDATE_MOONPHASE);
+  } else {
+    model_remove_update_req(UPDATE_MOONPHASE);
+    
+    if (view.layers.moonphase != NULL) {
+      // Destroy moonphase layer
+      alternating_layers_remove(view.layers.moonphase);
+      layer_destroy(view.layers.moonphase);
+      view.layers.moonphase = NULL;
+    }
+  }
+}
+
 void moonphase_changed() {
-  if (view.layers.moonphase == NULL && (!config->moonphase_night_only || !is_daytime())) {
+  if (view.layers.moonphase == NULL) {
     // Create moonphase layer
     Layer *window_layer = window_get_root_layer(view.window);
     GRect bounds = layer_get_bounds(window_layer);
@@ -985,17 +1022,40 @@ void moonphase_changed() {
     view.layers.moonphase = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
     layer_set_update_proc(view.layers.moonphase, moonphase_update_proc);
     alternating_layers_add(view.layers.moonphase, icons_get_moonphase(120));
-  } else if (view.layers.moonphase != NULL && (config->moonphase_night_only && is_daytime())) {
-    // Destroy moonphase layer
-    alternating_layers_remove(view.layers.moonphase);
-    layer_destroy(view.layers.moonphase);
-    view.layers.moonphase = NULL;
-  }
+  } 
 }
 
-void switcher_changed() {
-  // Make sure the layer exists
-  if (model->switcher && view.layers.switcher == NULL) {
+void switcher_timeout_callback(void *data) {
+  // Destroy the layer
+  if (view.layers.switcher) {
+    layer_remove_from_parent(view.layers.switcher);
+    layer_destroy(view.layers.switcher);    
+    view.layers.switcher = NULL;
+  }
+
+  // Clear the suspension
+  view.suspension_reason &= ~SUSPENSION_SWITCHER;
+    
+  // Unubscribe from tap events
+  model_remove_update_req(UPDATE_TAPS);
+  
+  // Reset timeout
+  view.switcher_timeout_timer = NULL;
+
+  // Destroy compass layer depending on configuration
+  #if defined(PBL_COMPASS)
+  compass_enable_changed();
+  #endif
+
+  // Reactivate the health layer if on suspension
+  #if defined(PBL_HEALTH)
+  if (view.suspension_reason & SUSPENSION_ACTIVITY) alternating_layers_show_layer(view.layers.health);
+  #endif
+}
+
+void flicked() {
+  // Make sure the switcher layer exists
+  if (view.layers.switcher == NULL) {
     // Initialize switcher animation to finished
     view.switcher_animation_progress = ANIMATION_NORMALIZED_MAX;
     
@@ -1007,31 +1067,21 @@ void switcher_changed() {
     layer_set_update_proc(view.layers.switcher, switcher_update_proc);
     layer_add_child(window_layer, view.layers.switcher);
     
-    // Create compass layer depending on configuration
-    #if defined(PBL_COMPASS)
-    compass_changed();
-    #endif
-    
     // Suspend alternating
     view.suspension_reason |= SUSPENSION_SWITCHER;
-  } else if (!model->switcher && view.layers.switcher != NULL) {
-    // Destroy the layer
-    layer_destroy(view.layers.switcher);    
-    view.layers.switcher = NULL;
     
-    // Clear the suspension
-    view.suspension_reason &= ~SUSPENSION_SWITCHER;
+    // Subscribe to tap events
+    model_add_update_req(UPDATE_TAPS);
     
-    // Destroy compass layer depending on configuration
+    // Deactivate switcher after 30sec
+    if (view.switcher_timeout_timer) app_timer_cancel(view.switcher_timeout_timer);
+    view.switcher_timeout_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
+    
+    // Create compass layer depending on configuration
     #if defined(PBL_COMPASS)
-    compass_changed();
+    compass_enable_changed();
     #endif
-    
-    // Reactivate the health layer if on suspension
-    #if defined(PBL_HEALTH)
-    if (view.suspension_reason & SUSPENSION_ACTIVITY) alternating_layers_show_layer(view.layers.health);
-    #endif
-  }
+  } 
 }
 
 static void switcher_animation_update(Animation *animation, const AnimationProgress progress) {
@@ -1045,24 +1095,88 @@ static void switcher_animation_teardown(Animation *animation) {
 }
 
 void tapped() {
-  // Initialize switcher animation to start
-  view.switcher_animation_progress = 0;
+  if (view.layers.switcher) {
+    // Initialize switcher animation to start
+    view.switcher_animation_progress = 0;
+    
+    // Alternate to the next available layer
+    if (view.alt_layer_count > 0) { 
+      alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
+    }
+    
+    // Animate the layer queue
+    if (!view.switcher_animation) {
+      view.switcher_animation = animation_create();
+      animation_set_duration(view.switcher_animation, 250);
+      static const AnimationImplementation implementation = {
+        .update = switcher_animation_update,
+        .teardown = switcher_animation_teardown
+      };
+      animation_set_implementation(view.switcher_animation, &implementation);
+      animation_schedule(view.switcher_animation);
+    }
   
-  // Tapped in the switcher, alternate to the next available layer
-  if (view.alt_layer_count > 0) { 
-    alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
+    // Prolong switcher
+    if (view.switcher_timeout_timer) app_timer_reschedule(view.switcher_timeout_timer, 30000);
+  }
+}
+
+static void alert_timeout_handler(void *context) {
+  // Clear the suspension
+  view.suspension_reason &= ~SUSPENSION_ERROR_ALERT;
+  
+  // Show the layer hidden by the alert when not in the switcher
+  if (!(view.suspension_reason & SUSPENSION_SWITCHER)) alternating_layers_show(view.suspension_return_layer);
+  
+  // Deregister timeout handler
+  view.alert_timeout_handler = NULL;
+    
+  // Remove error layer when no longer in error or when errors are disabled
+  if (model->error == ERROR_NONE || !config->enable_error) {
+    alternating_layers_remove(view.layers.error);
+    layer_destroy(view.layers.error);
+    view.layers.error = NULL;
+  }
+}
+
+void error_changed(enum ErrorCodes prevError) {
+  // Check if error layer is allready visible
+  if (view.layers.error == NULL) {
+    // Create error layer
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+
+    view.layers.error = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
+    layer_set_update_proc(view.layers.error, error_update_proc);
+    alternating_layers_add(view.layers.error, ICON_BLUETOOTH);
   }
   
-  // Animate the layer queue
-  if (!view.switcher_animation) {
-    view.switcher_animation = animation_create();
-    animation_set_duration(view.switcher_animation, 250);
-    static const AnimationImplementation implementation = {
-      .update = switcher_animation_update,
-      .teardown = switcher_animation_teardown
-    };
-    animation_set_implementation(view.switcher_animation, &implementation);
-    animation_schedule(view.switcher_animation);
+  // Set suspension
+  if (!(view.suspension_reason & SUSPENSION_ERROR_ALERT)) {
+    view.suspension_reason |= SUSPENSION_ERROR_ALERT;
+    view.suspension_return_layer = view.alt_layer_visible;
+  }
+  
+  // Stop switcher on vibration overload to avoid battery draining
+  if (model->error == ERROR_VIBRATION_OVERLOAD) {
+    if (view.switcher_timeout_timer) app_timer_cancel(view.switcher_timeout_timer);
+    switcher_timeout_callback(NULL);
+  }
+  
+  // Show error layer
+  if (!view.layers.switcher) alternating_layers_show_layer(view.layers.error);
+  
+  // Cancel previous timeout if there is one
+  if (view.alert_timeout_handler) {
+    app_timer_cancel(view.alert_timeout_handler);
+  }
+  
+  if (model->error == ERROR_NONE && prevError != ERROR_CONNECTION) {
+    // Stop suspending for alert
+    alert_timeout_handler(NULL);
+  } else {
+    // Shedule timeout handler to stop suspending for alert
+    view.alert_timeout_handler = app_timer_register(15000, alert_timeout_handler, NULL); // Show as an alert for 15 seconds
   }
 }
 
@@ -1125,11 +1239,6 @@ void main_window_load(Window *window) {
     alternating_layers_add(view.layers.timezone, ICON_TIMEZONE);
   }
   
-  // Create compass layer depending on configuration
-  #if defined(PBL_COMPASS)
-  compass_changed();
-  #endif
-  
   // Update time text
   time_changed();
 }
@@ -1141,7 +1250,9 @@ void main_window_unload(Window *window) {
   text_layer_destroy(view.layers.minute);
   layer_destroy(view.layers.date_top);
   layer_destroy(view.layers.date_bottom);
+  
   if (view.layers.battery) layer_destroy(view.layers.battery);
+  if (view.layers.altitude) layer_destroy(view.layers.altitude);
   #if defined(PBL_COMPASS)
   if (view.layers.compass) layer_destroy(view.layers.compass);
   #endif
@@ -1160,9 +1271,6 @@ void main_window_unload(Window *window) {
   fonts_unload_custom_font(view.fonts.icons);
   fonts_unload_custom_font(view.fonts.icons_small);
   fonts_unload_custom_font(view.fonts.icons_large);
-  
-  // Unsubscribe from compass events
-  if (view.compass_subscribed) compass_service_unsubscribe();
 }
 
 void view_init() { 
@@ -1184,21 +1292,45 @@ void view_init() {
   window_stack_push(view.window, true);
   
   // Attach to model events
-  model->events.on_error_change = error_changed;
-  model->events.on_time_change = time_changed;
+  model->events.on_error_change = &error_changed;
+  model->events.on_time_change = &time_changed;
   if (config->alternate_mode != 'M') {
-    model->events.on_switcher_change = switcher_changed;
-    model->events.on_tap = tapped;
+    model->events.on_flick = &flicked;
+    model->events.on_tap = &tapped;
+    model_add_update_req(UPDATE_FLICKS);
   }
-  if (config->enable_battery) model->events.on_battery_change = battery_changed;
-  if (config->enable_weather) model->events.on_weather_temperature_change = weather_changed;
-  if (config->enable_weather) model->events.on_weather_condition_change = weather_changed;
-  if (config->enable_sun) model->events.on_sunrise_change = sunrise_sunset_changed;
-  if (config->enable_sun) model->events.on_sunset_change = sunrise_sunset_changed;
-  #if defined(PBL_HEALTH)
-  if (config->enable_health) model->events.on_activity_change = activity_changed;
+  if (config->enable_altitude) {
+    model->events.on_altitude_change = &altitude_changed;
+    evaluate_altitude_req();
+  }
+  if (config->enable_battery) {
+    model->events.on_battery_change = &battery_changed;
+    model_add_update_req(UPDATE_BATTERY);
+  }
+  #if defined(PBL_COMPASS)
+  model->events.on_compass_heading_change = &compass_heading_changed; 
+  compass_enable_changed();
   #endif
-  if (config->enable_moonphase) model->events.on_moonphase_change = moonphase_changed;
+  if (config->enable_weather) {
+    model->events.on_weather_temperature_change = &weather_changed;
+    model->events.on_weather_condition_change = &weather_changed;
+    model_add_update_req(UPDATE_WEATHER);
+  }
+  if (config->enable_sun) {
+    model->events.on_sunrise_change = &sunrise_sunset_changed;
+    model->events.on_sunset_change = &sunrise_sunset_changed;
+    model_add_update_req(UPDATE_SUN);
+  }
+  #if defined(PBL_HEALTH)
+  if (config->enable_health) {
+    model->events.on_activity_change = &activity_changed;
+    model_add_update_req(UPDATE_HEALTH);
+  }
+  #endif
+  if (config->enable_moonphase) {
+    model->events.on_moonphase_change = &moonphase_changed;
+    evaluate_moonphase_req();
+  }
   
   // Initialize some layers
   if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
@@ -1209,7 +1341,18 @@ void view_init() {
 }
 
 void view_deinit() {  
+  // Stop animations
+  if (view.switcher_animation) {
+    animation_unschedule(view.switcher_animation);
+    animation_destroy(view.switcher_animation);
+  }
+  
+  // Stop timers
+  if (view.alert_timeout_handler) app_timer_cancel(view.alert_timeout_handler);
+  if (view.switcher_timeout_timer) app_timer_cancel(view.switcher_timeout_timer);
+  
   // Unregister from model events
+  model_remove_update_req(~0); // Remove all requirements
   model_reset_events();
   
   // Hide window

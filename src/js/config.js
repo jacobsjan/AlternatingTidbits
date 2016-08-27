@@ -116,6 +116,81 @@ module.exports = [
     ]
   },
   {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Localization"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgAltitudeUnits",
+        "defaultValue": 'M',
+        "label": "Altitude units",
+        "options": [
+          { 
+            "label": "Meters", 
+            "value": 'M' 
+          },
+          { 
+            "label": "Feet", 
+            "value": 'I' 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthUnits",
+        "defaultValue": 'M',
+        "label": "Distance units",
+        "capabilities": ["HEALTH"],
+        "options": [
+          { 
+            "label": "(Kilo)meters", 
+            "value": 'M' 
+          },
+          { 
+            "label": "Miles", 
+            "value": 'I' 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgTemperatureUnits",
+        "label": "Temperature units",
+        "defaultValue": 'C',
+        "options": [
+          { 
+            "label": "Fahrenheit", 
+            "value": 'F' 
+          },
+          { 
+            "label": "Celcius", 
+            "value": 'C' 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgHealthNumbers",
+        "label": "Number format",
+        "defaultValue": 'M',     
+        "capabilities": ["HEALTH"],
+        "options": [
+          { 
+            "label": "1.000,00", 
+            "value": 'M' 
+          },
+          { 
+            "label": "1,000.00", 
+            "value": 'I' 
+          }
+        ]
+      }
+    ]
+  },
+  {
     "type": "heading",
     "defaultValue": "Alternating Tidbits"
   },
@@ -134,6 +209,12 @@ module.exports = [
         "type": "toggle",
         "messageKey": "cfgEnableTimezone",
         "label": "Alternative Time Zone",
+        "defaultValue": false
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableAltitude",
+        "label": "Altitude",
         "defaultValue": false
       },
       {
@@ -221,6 +302,19 @@ module.exports = [
     "items": [
       {
         "type": "heading",
+        "defaultValue": "Altitude"
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "Fetches the phone's (GPS) location every minute." 
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
         "defaultValue": "Battery"
       },
       {
@@ -288,38 +382,6 @@ module.exports = [
         "label": "Stick during activity",
         "description": "Alternating will be suspended during walks/runs/sleep.",
         "defaultValue": true
-      },
-      {
-        "type": "select",
-        "messageKey": "cfgHealthUnits",
-        "defaultValue": 'M',
-        "label": "Distance units",
-        "options": [
-          { 
-            "label": "(Kilo)meters", 
-            "value": 'M' 
-          },
-          { 
-            "label": "Miles", 
-            "value": 'I' 
-          }
-        ]
-      },
-      {
-        "type": "select",
-        "messageKey": "cfgHealthNumbers",
-        "label": "Number format",
-        "defaultValue": 'M',
-        "options": [
-          { 
-            "label": "1.000,00", 
-            "value": 'M' 
-          },
-          { 
-            "label": "1,000.00", 
-            "value": 'I' 
-          }
-        ]
       },
       {
         "type": "heading",
@@ -526,6 +588,10 @@ module.exports = [
             "value": constants.ACTIVITY_CALORIES 
           },
           { 
+            "label": "Walk climb|descend", 
+            "value": constants.ACTIVITY_CLIMB_DESCEND 
+          },
+          { 
             "label": "Walk distance", 
             "value": constants.ACTIVITY_DISTANCE 
           },
@@ -598,6 +664,10 @@ module.exports = [
             "value": constants.ACTIVITY_CALORIES 
           },
           { 
+            "label": "Walk climb|descend", 
+            "value": constants.ACTIVITY_CLIMB_DESCEND 
+          },
+          { 
             "label": "Walk distance", 
             "value": constants.ACTIVITY_DISTANCE 
           },
@@ -668,6 +738,10 @@ module.exports = [
           { 
             "label": "Walk calories", 
             "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Walk climb|descend", 
+            "value": constants.ACTIVITY_CLIMB_DESCEND 
           },
           { 
             "label": "Walk distance", 
@@ -743,6 +817,10 @@ module.exports = [
             "value": constants.ACTIVITY_CALORIES 
           },
           { 
+            "label": "Run climb|descend", 
+            "value": constants.ACTIVITY_CLIMB_DESCEND 
+          },
+          { 
             "label": "Run distance", 
             "value": constants.ACTIVITY_DISTANCE 
           },
@@ -815,6 +893,10 @@ module.exports = [
             "value": constants.ACTIVITY_CALORIES 
           },
           { 
+            "label": "Run climb|descend", 
+            "value": constants.ACTIVITY_CLIMB_DESCEND 
+          },
+          { 
             "label": "Run distance", 
             "value": constants.ACTIVITY_DISTANCE 
           },
@@ -885,6 +967,10 @@ module.exports = [
           { 
             "label": "Run calories", 
             "value": constants.ACTIVITY_CALORIES 
+          },
+          { 
+            "label": "Run climb|descend", 
+            "value": constants.ACTIVITY_CLIMB_DESCEND 
           },
           { 
             "label": "Run distance", 
@@ -1053,22 +1139,6 @@ module.exports = [
       {
         "type": "heading",
         "defaultValue": "Weather"
-      },
-      {
-        "type": "radiogroup",
-        "messageKey": "cfgTemperatureUnits",
-        "label": "Temperature Units",
-        "defaultValue": 'C',
-        "options": [
-          { 
-            "label": "Fahrenheit", 
-            "value": 'F' 
-          },
-          { 
-            "label": "Celcius", 
-            "value": 'C' 
-          }
-        ]
       },
       {
         "type": "select",

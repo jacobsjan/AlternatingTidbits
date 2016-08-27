@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include <limits.h>
 
 #include "config.h"
 #include "model.h"
@@ -9,8 +10,10 @@
 #define FETCH_RETRIES 5
 bool js_ready = false;
 int weather_fetch_countdown = 0;
-AppTimer* switcher_timer = NULL;
+AppTimer* vibration_overload_timer = NULL;
 bool tapping = false;
+
+void altitude_req_changed(bool required);
   
 #if defined(PBL_HEALTH)
 #define ACTIVITY_MONITOR_WINDOW 10
@@ -21,12 +24,17 @@ struct ActivityStamp {
   int totalCalories;
   int totalDistance;
   int totalStepCount;
+  int totalClimb;
+  int totalDescend;
   time_t time;
 };
 
 struct ActivityStamp activity_start;
 struct ActivityStamp activity_buffer[ACTIVITY_MONITOR_WINDOW];
 int activity_buffer_index;
+
+int altitude_climb = 0;
+int altitude_descend = 0;
 #endif
 
 static inline bool is_asleep() {
@@ -40,7 +48,7 @@ static inline bool is_asleep() {
 
 static bool fetch_weather() {
   // Check configuration of weather/sunrise/sunset, bluetooth connection, JS Ready and sleeping
-  if ((config->enable_sun || config->enable_weather) && connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
+  if ((model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) && connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fetch, 1));    
     return true;
   } else {
@@ -51,7 +59,7 @@ static bool fetch_weather() {
 
 static bool fetch_moonphase() {  
   // Check configuration of moonphase, bluetooth connection, JS Ready 
-  if (config->enable_moonphase && connection_service_peek_pebble_app_connection() && js_ready) {
+  if ((model->update_req & UPDATE_MOONPHASE) && connection_service_peek_pebble_app_connection() && js_ready) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchMoonphase, 1));    
     return true;
   } else {
@@ -71,6 +79,9 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     
     // Is moonphase fetch wanted?
     fetch_moonphase();
+    
+    // Subscribe to altitude
+    if (model->update_req & UPDATE_ALTITUDE) altitude_req_changed(true);
   }
   
   // Weather
@@ -111,6 +122,23 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   if(tuple && (moonChanged = true)) moonillumination = tuple->value->int32;
   if (moonChanged) model_set_moon(moonphase, moonillumination);
   
+  // Altitude 
+  tuple = dict_find(iter, MESSAGE_KEY_Altitude);
+  if(tuple) {
+    int altitude = tuple->value->int32;
+#if defined(PBL_HEALTH)
+    if (model->altitude != INT_MIN) {
+      if (altitude > model->altitude) 
+      {
+          altitude_climb += altitude - model->altitude;
+      } else {
+          altitude_descend += model->altitude - altitude;
+      }
+    }
+#endif    
+    model_set_altitude(altitude);
+  }
+  
   // Configuration
   bool cfgChanged = parse_configuration_messages(iter);    
   if (cfgChanged) {
@@ -136,6 +164,8 @@ void update_health() {
   activity_buffer[activity_buffer_index].totalCalories = (int)health_service_sum_today(HealthMetricActiveKCalories);
   activity_buffer[activity_buffer_index].totalDistance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters);
   activity_buffer[activity_buffer_index].totalStepCount = (int)health_service_sum_today(HealthMetricStepCount);
+  activity_buffer[activity_buffer_index].totalClimb = altitude_climb;
+  activity_buffer[activity_buffer_index].totalDescend = altitude_descend;
   activity_buffer[activity_buffer_index].time = time(NULL);
   
   // Calculate the average step pace in the buffer
@@ -157,7 +187,9 @@ void update_health() {
         if (i != last_index) {
           activity_buffer[i].totalCalories -= activity_buffer[maxValuesIndex].totalCalories;
           activity_buffer[i].totalDistance -= activity_buffer[maxValuesIndex].totalDistance;
-          activity_buffer[i].totalStepCount -= activity_buffer[maxValuesIndex].totalStepCount;          
+          activity_buffer[i].totalStepCount -= activity_buffer[maxValuesIndex].totalStepCount;     
+          activity_buffer[i].totalClimb -= activity_buffer[maxValuesIndex].totalClimb;
+          activity_buffer[i].totalDescend -= activity_buffer[maxValuesIndex].totalDescend;       
         }
       }
     }
@@ -250,13 +282,65 @@ void update_health() {
   int duration = (activity_buffer[last_index].time - activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
   int distance = activity_buffer[last_index].totalDistance - activity_start.totalDistance;
   int step_count = activity_buffer[last_index].totalStepCount - activity_start.totalStepCount;
+  int climb = activity_buffer[last_index].totalClimb - activity_start.totalClimb;
+  int descend = activity_buffer[last_index].totalDescend - activity_start.totalDescend;
   
   // Update the model
-  model_set_activity_counters(calories, duration, distance, step_count);
+  model_set_activity_counters(calories, duration, distance, step_count, climb, descend);
   if (avg_steps_per_minute > 0 && model->activity != current_activity) model_set_activity(current_activity);
     
   // Move index to next slot in buffer
   activity_buffer_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;
+}
+
+void health_init() {
+  // Load stored health activity
+  if (persist_exists(STORAGE_HEALTH_ACTIVITY) && persist_exists(STORAGE_HEALTH_ACTIVITY_START)) {
+    enum Activities saved_activity = persist_read_int(STORAGE_HEALTH_ACTIVITY);
+    struct ActivityStamp saved_activity_start;
+    persist_read_data(STORAGE_HEALTH_ACTIVITY_START, &saved_activity_start, sizeof(saved_activity_start));
+    
+    // Validate that the activity is still ongoing
+    bool resume = false;
+    int duration_since_start = (time(NULL) - saved_activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
+    if (saved_activity == ACTIVITY_SLEEP) {
+      // Are we still sleeping?
+      if (is_asleep()) {
+        // Yep, resume activity
+        resume = true;
+      }
+    } else if (saved_activity == ACTIVITY_WALK || saved_activity == ACTIVITY_RUN) {
+      // Is the average #steps since saved activity start greater than the threshold?
+      int steps_since_start = (int)health_service_sum_today(HealthMetricStepCount) - saved_activity_start.totalStepCount;
+      int avg_steps_per_minute = steps_since_start / duration_since_start;
+      if (avg_steps_per_minute >= (saved_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
+        // Yep, resume activity
+        resume = true;
+      }
+    }
+    
+    // Resume activity
+    if (resume) {
+        activity_start = saved_activity_start; 
+        
+        int calories = (int)health_service_sum_today(HealthMetricActiveKCalories) - activity_start.totalCalories;
+        int duration = duration_since_start;
+        int distance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters) - activity_start.totalDistance;
+        int step_count = (int)health_service_sum_today(HealthMetricStepCount) - activity_start.totalStepCount;
+        
+        // Read climb and descend from storage
+        int persisted_climb = activity_start.totalClimb;
+        if (persist_exists(STORAGE_ALTITUDE_CLIMB)) persisted_climb = persist_read_int(STORAGE_ALTITUDE_CLIMB);
+        int persisted_descend = activity_start.totalDescend;
+        if (persist_exists(STORAGE_ALTITUDE_DESCEND)) persisted_climb = persist_read_int(STORAGE_ALTITUDE_DESCEND);
+        int climb = persisted_climb - activity_start.totalClimb;
+        int descend = persisted_descend - activity_start.totalDescend;
+
+        // Update the model
+        model_set_activity_counters(calories, duration, distance, step_count, climb, descend);
+        model_set_activity(saved_activity);
+    }
+  }
 }
 #endif
 
@@ -265,25 +349,27 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     // Send unsent messages
     message_queue_send_next();
     
-    // Update weather
-    weather_fetch_countdown--;
-    if (weather_fetch_countdown <= -FETCH_RETRIES) {
-      // Ran out of retries, weather fetch failed
-      model_set_error(ERROR_FETCH);   
-      
-      // Reset fetch countdown
-      weather_fetch_countdown = config->weather_refresh;
-    } else if (weather_fetch_countdown <= 0) {
-      // Fetch weather
-      if (!fetch_weather()) {
-        // Fetching the weather was not tried, suspend countdown
-        weather_fetch_countdown++;
-      }      
+    // Update weather and sunset/sunrise
+    if (model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) {
+      weather_fetch_countdown--;
+      if (weather_fetch_countdown <= -FETCH_RETRIES) {
+        // Ran out of retries, weather fetch failed
+        model_set_error(ERROR_FETCH);   
+        
+        // Reset fetch countdown
+        weather_fetch_countdown = config->weather_refresh;
+      } else if (weather_fetch_countdown <= 0) {
+        // Fetch weather
+        if (!fetch_weather()) {
+          // Fetching the weather was not tried, suspend countdown
+          weather_fetch_countdown++;
+        }      
+      }
     }
     
     // Update health
     #if defined(PBL_HEALTH)
-    update_health();
+    if (model->update_req & UPDATE_HEALTH) update_health();
     #endif
     
     // Update the displayed time
@@ -325,25 +411,28 @@ static void battery_handler(BatteryChargeState charge) {
   model_set_battery(charge.charge_percent, charge.is_charging, charge.is_plugged);
 }
 
-void switcher_timeout_callback(void *data) {
-  if (model->error != ERROR_VIBRATION_OVERLOAD) { 
-      // Unsubscribe from accelerator data
-    accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
-    accel_data_service_unsubscribe();
+void battery_req_changed(bool required) {
+  if (required) {    
+    // Initialize the model
+    battery_handler(battery_state_service_peek());
     
-    // De-activate the switcher 
-    model_set_switcher(false); 
-  } else {  
-    // Reset vibration overload error
-    model_set_error(ERROR_NONE);
+    // Register with BatteryService
+    battery_state_service_subscribe(battery_handler);
+  } else {
+    // Unsubscribe from battery service
+    battery_state_service_unsubscribe();
   }
-  
-  switcher_timer = NULL;
+}
+
+void vibration_overload_timeout_callback(void *data) {
+  // Reset vibration overload error
+  model_set_error(ERROR_NONE);  
+  vibration_overload_timer = NULL;
 }
 
 void accel_handler(AccelData *data, uint32_t num_samples) {
   // Detect minor taps
-  int num_calm = 0;
+  bool also_calm = false;
   bool tapped = false;
   for (uint32_t i = 0; i < num_samples - 1; ++i) {
     int xDiff = abs(data[i + 1].x - data[i].x);
@@ -358,110 +447,114 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
       tapped = true;
     }
     
-    if (diff < 50) ++num_calm;
+    if (diff < 50) also_calm = true;
   }
   
-  if (num_calm == 0) {
-    // Too many vibrations, turn off switcher to avoid battery draining
-    if (switcher_timer) app_timer_cancel(switcher_timer);
-    switcher_timeout_callback(NULL);
-    
+  if (!also_calm) {    
     // Set error
     model_set_error(ERROR_VIBRATION_OVERLOAD);
     
     // Timeout error after 15sec
-    switcher_timer = app_timer_register(15000, switcher_timeout_callback, NULL);
+    if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
+    vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
   } else if (tapped) {
     // Signal tap detected
     model_signal_tap();
+  }
+}
 
-    // Prolong switcher
-    if (switcher_timer) app_timer_reschedule(switcher_timer, 30000);
+void tap_req_changed(bool required) {
+  if (required) {    
+    // Subscribe to accelerator data to detect minor taps
+    accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
+    accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
+    tapping = false;
+  } else {
+    // Unsubscribe from accelerator data
+    accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
+    accel_data_service_unsubscribe();
   }
 }
 
 static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
-  if (!model->switcher && config->alternate_mode != 'M') {
+  // Check whether not in vibration overload
+  if (model->error != ERROR_VIBRATION_OVERLOAD) { 
     // Check whether not vibrating
     AccelData accel_data;
     accel_service_peek(&accel_data);
     if (!accel_data.did_vibrate) {
-      // Check whether not in vibration overload
-      if (model->error != ERROR_VIBRATION_OVERLOAD) { 
-        // Activate the switcher
-        model_set_switcher(true);
-    
-        // Subscribe to accelerator data to detect minor taps
-        accel_data_service_subscribe(25, accel_handler); // Callback every 25 samples, 4 times per second
-        accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
-        tapping = false;
-      
-        // Deactivate switcher after 30sec
-        if (switcher_timer) app_timer_cancel(switcher_timer);
-        switcher_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
-      } else {
-        // Prolong vibration overload
-        if (switcher_timer) app_timer_cancel(switcher_timer);
-        switcher_timer = app_timer_register(15000, switcher_timeout_callback, NULL);
-      }
+      // Flick detected
+      model_signal_flick();
     }
-  } 
-}
-
-#if defined(PBL_HEALTH)
-void health_init() {
-  // Load stored health activity
-  if (persist_exists(STORAGE_HEALTH_ACTIVITY) && persist_exists(STORAGE_HEALTH_ACTIVITY_START)) {
-    enum Activities saved_activity = persist_read_int(STORAGE_HEALTH_ACTIVITY);
-    struct ActivityStamp saved_activity_start;
-    persist_read_data(STORAGE_HEALTH_ACTIVITY_START, &saved_activity_start, sizeof(saved_activity_start));
-    
-    // Validate that the activity is still ongoing
-    bool resume = false;
-    int duration_since_start = (time(NULL) - saved_activity_start.time + SECONDS_PER_MINUTE / 2) / SECONDS_PER_MINUTE;
-    if (saved_activity == ACTIVITY_SLEEP) {
-      // Are we still sleeping?
-      if (is_asleep()) {
-        // Yep, resume activity
-        resume = true;
-      }
-    } else if (saved_activity == ACTIVITY_WALK || saved_activity == ACTIVITY_RUN) {
-      // Is the average #steps since saved activity start greater than the threshold?
-      int steps_since_start = (int)health_service_sum_today(HealthMetricStepCount) - saved_activity_start.totalStepCount;
-      int avg_steps_per_minute = steps_since_start / duration_since_start;
-      if (avg_steps_per_minute >= (saved_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
-        // Yep, resume activity
-        resume = true;
-      }
+  } else {
+    // Prolong vibration overload
+    if (vibration_overload_timer) {
+      app_timer_reschedule(vibration_overload_timer, 15000);
     }
-    
-    // Resume activity
-    if (resume) {
-        activity_start = saved_activity_start; 
-        
-        int calories = (int)health_service_sum_today(HealthMetricActiveKCalories) - activity_start.totalCalories;
-        int duration = duration_since_start;
-        int distance = (int)health_service_sum_today(HealthMetricWalkedDistanceMeters) - activity_start.totalDistance;
-        int step_count = (int)health_service_sum_today(HealthMetricStepCount) - activity_start.totalStepCount;
-
-        // Update the model
-        model_set_activity_counters(calories, duration, distance, step_count);
-        model_set_activity(saved_activity);
+    else {
+      vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
     }
   }
 }
+
+void flick_req_changed(bool required) {
+  if (required) {    
+    accel_tap_service_subscribe(accel_flick_handler);
+  } else {
+    accel_tap_service_unsubscribe();
+  }
+}
+
+#if defined(PBL_COMPASS)
+void compass_heading_handler(CompassHeadingData heading) {
+  model_set_compass_heading(heading);
+}
+
+void compass_req_changed(bool required) {
+  if (required) {
+    compass_service_subscribe(&compass_heading_handler);
+    compass_service_set_heading_filter(TRIG_MAX_ANGLE / 32);    
+  } else {
+    compass_service_unsubscribe();    
+  }
+}
 #endif
+
+void altitude_req_changed(bool required) {
+  if (js_ready) {
+    if (required) {
+      model->altitude = INT_MIN;
+      message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SubscribeAltitude, 1));      
+    } else {
+      message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_UnsubscribeAltitude, 1));       
+    }
+  }
+}
+
+void update_requirements_changed(enum ModelUpdates prev_req) {
+  enum ModelUpdates changes = model->update_req ^ prev_req;
+  
+  if (changes & UPDATE_FLICKS) flick_req_changed(model->update_req & UPDATE_FLICKS);
+  if (changes & UPDATE_TAPS) tap_req_changed(model->update_req & UPDATE_TAPS);
+  #if defined(PBL_COMPASS)
+  if (changes & UPDATE_COMPASS) compass_req_changed(model->update_req & UPDATE_COMPASS);
+  #endif
+  if (changes & UPDATE_ALTITUDE) altitude_req_changed(model->update_req & UPDATE_ALTITUDE);
+  if (changes & UPDATE_MOONPHASE) fetch_moonphase();
+  if (changes & UPDATE_WEATHER || changes & UPDATE_SUN) fetch_moonphase();
+  if (changes & UPDATE_BATTERY) battery_req_changed(model->update_req & UPDATE_BATTERY);
+}
 
 static void app_init() {     
   // Initialize the configuration
   config_init();
   
   // Initialize the model
+  model->events.on_update_req_change = &update_requirements_changed;
   time_t temp = time(NULL);
   struct tm *tick_time = localtime(&temp);
   model_set_time(tick_time);
   if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
-  battery_handler(battery_state_service_peek());
   
   // Load health data
   #if defined(PBL_HEALTH)
@@ -490,24 +583,13 @@ static void app_init() {
     .pebble_app_connection_handler = connection_handler,
     .pebblekit_connection_handler = NULL
   });
-  
-  // Register with BatteryService
-  battery_state_service_subscribe(battery_handler);
-  
-  // Subscribe to flick events
-  accel_tap_service_subscribe(accel_flick_handler);
 }
 
 static void app_deinit() {
-  // De-initialize switcher
-  if (model->switcher) {
-    if (switcher_timer) app_timer_cancel(switcher_timer);
-    accel_data_service_unsubscribe();
-  }
+  // Stop timers
+  if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
   
   // Unsubscribe from services
-  accel_tap_service_unsubscribe();
-  battery_state_service_unsubscribe();
   connection_service_unsubscribe();
   tick_timer_service_unsubscribe();
   app_message_deregister_callbacks();
@@ -522,6 +604,10 @@ static void app_deinit() {
   #if defined(PBL_HEALTH)
   persist_write_int(STORAGE_HEALTH_ACTIVITY, model->activity);
   persist_write_data(STORAGE_HEALTH_ACTIVITY_START, &activity_start, sizeof(struct ActivityStamp)); 
+  
+  // Save climb and descend
+  persist_write_int(STORAGE_ALTITUDE_CLIMB, altitude_climb);
+  persist_write_int(STORAGE_ALTITUDE_DESCEND, altitude_descend); 
   #endif
 }
 

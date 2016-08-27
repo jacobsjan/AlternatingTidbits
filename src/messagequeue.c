@@ -13,10 +13,10 @@ static bool sending = false;
 
 void message_queue_send_next() {
   if (message_queue && !sending) {
-    sending = true;
-    
     DictionaryIterator *iter;
     if(app_message_outbox_begin(&iter) == APP_MSG_OK) {
+      sending = true;
+    
       for (int n = 0; n < message_queue->tuplet_count; ++n) {
         dict_write_tuplet(iter, &message_queue->tuplets[n]);
       }
@@ -47,7 +47,7 @@ void message_queue_send(Tuplet tuplets[], int tuplet_count) {
   MessageQueue* queue = malloc(sizeof(MessageQueue) + tuplet_count * sizeof(Tuplet));
   queue->next = NULL;
   queue->tuplet_count = tuplet_count;
-  memcpy(queue->tuplets, tuplets,tuplet_count * sizeof(Tuplet));
+  memcpy(queue->tuplets, tuplets, tuplet_count * sizeof(Tuplet));
   
   if (!message_queue) {
     message_queue = queue;

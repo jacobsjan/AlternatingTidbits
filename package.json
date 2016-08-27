@@ -71,7 +71,12 @@
             "Moonphase",
             "Moonillumination",
             "cfgEnableMoonphase",
-            "cfgMoonphaseNightOnly"
+            "cfgMoonphaseNightOnly",
+            "Altitude",
+            "cfgEnableAltitude",
+            "SubscribeAltitude",
+            "UnsubscribeAltitude",
+            "cfgAltitudeUnits"
         ],
         "projectType": "native",
         "resources": {

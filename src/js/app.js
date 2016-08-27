@@ -9,6 +9,8 @@ var MessageQueue = require('./libs/js-message-queue');
 var WeatherMan = require('./libs/weather-man');
 var constants = require('./constants');
 var keys = require('message_keys');
+var lastSubmittedAltitude = Number.MIN_VALUE;
+var altitudeSubscription = false;
 
 function sendMessage(data) {
   MessageQueue.sendAppMessage(data, ack, nack);
@@ -91,12 +93,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
   dict[keys.cfgTimeZoneCity] = city;
   
   // Send settings values to watch side
-  Pebble.sendAppMessage(dict, function(e) {
-    console.log('Sent config data to Pebble');
-  }, function(e) {
-    console.log('Failed to send config data!');
-    console.log(JSON.stringify(e));
-  });
+  sendMessage(dict);
   
   // Reload settings
   settings = JSON.parse(localStorage.getItem('clay-settings'));
@@ -159,8 +156,39 @@ Pebble.addEventListener('appmessage', function(e) {
         fetchLocation();
     } else if (e.payload.FetchMoonphase) {
         fetchMoonphase();
+    } else if (e.payload.SubscribeAltitude) {
+      // Look up altitude every 60 seconds 
+      fetchAltitude();
+      altitudeSubscription = window.setInterval(fetchAltitude, 60000);  
+    } else if (e.payload.UnsubscribeAltitude) {
+      window.clearInterval(altitudeSubscription);
+      lastSubmittedAltitude = Number.MIN_VALUE;
     }
 });
+
+function fetchAltitude() {
+  navigator.geolocation.getCurrentPosition( function (position) {
+      // Succes, got location
+      var currentAltitude = position.coords.altitude;
+      
+      // Validate that the altitude has changed before sending it to the watch
+      if (Math.abs(currentAltitude - lastSubmittedAltitude) > position.coords.altitudeAccuracy / 2) {
+        lastSubmittedAltitude = currentAltitude;
+        sendMessage({
+          'Altitude': Math.round(currentAltitude)
+        });
+      }
+    }, function(err) {
+        console.warn('location error: ' + err.code + ' - ' + err.message); 
+        sendMessage({
+          'Err': constants.LOCATION_ERROR,
+        });    
+    }, { 
+      enableHighAccuracy: true,
+      maximumAge: 20000,
+      timeout: 30000
+    } );
+}
 
 function geoloc(latitude, longitude)
 {
@@ -185,11 +213,9 @@ function fetchLocation() {
     
       }, function(err) { //Error
         console.warn('location error: ' + err.code + ' - ' + err.message);
-    
         sendMessage({
           'Err': constants.LOCATION_ERROR,
-        });
-    
+        });    
       }, { //Options
         timeout: 30000, //30 seconds
         maximumAge: 300000, //5 minutes

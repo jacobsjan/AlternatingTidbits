@@ -11,6 +11,7 @@ char* ICON_FETCH_ERROR = "\uf03e"; // wi-cloud-refresh (Weather Icons)
 char* ICON_VIBRATION_OVERLOAD = "\uf09e"; //wi-earthquake (Weather Icons)
 
 char* ICON_TIMEZONE = "\uf2a7"; 
+char* ICON_ALTITUDE = "\uf1bc"; 
 
 #if defined(PBL_COMPASS)
 char* ICON_COMPASS_ROTATE = "\uf0c1"; 

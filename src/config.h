@@ -2,9 +2,6 @@
 #include <pebble.h>
 #include "model.h"
 
-// In wait of SDK 4.0
-#define PBL_COMPASS
-
 struct Config {
   GColor color_background;
   GColor color_primary;
@@ -19,6 +16,7 @@ struct Config {
   bool vibrate_hourly;
   
   bool enable_timezone;
+  bool enable_altitude;
   bool enable_battery;
   #if defined(PBL_COMPASS)
   bool enable_compass;
@@ -34,6 +32,8 @@ struct Config {
   
   int timezone_offset;
   char timezone_city[20];
+  
+  char altitude_unit;
   
   int battery_show_from;
   int battery_accent_from;
