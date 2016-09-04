@@ -329,12 +329,12 @@ void health_init() {
         int step_count = (int)health_service_sum_today(HealthMetricStepCount) - activity_start.totalStepCount;
         
         // Read climb and descend from storage
-        int persisted_climb = activity_start.totalClimb;
-        if (persist_exists(STORAGE_ALTITUDE_CLIMB)) persisted_climb = persist_read_int(STORAGE_ALTITUDE_CLIMB);
-        int persisted_descend = activity_start.totalDescend;
-        if (persist_exists(STORAGE_ALTITUDE_DESCEND)) persisted_climb = persist_read_int(STORAGE_ALTITUDE_DESCEND);
-        int climb = persisted_climb - activity_start.totalClimb;
-        int descend = persisted_descend - activity_start.totalDescend;
+        altitude_climb = activity_start.totalClimb;
+        if (persist_exists(STORAGE_ALTITUDE_CLIMB)) altitude_climb = persist_read_int(STORAGE_ALTITUDE_CLIMB);
+        altitude_descend = activity_start.totalDescend;
+        if (persist_exists(STORAGE_ALTITUDE_DESCEND)) altitude_descend = persist_read_int(STORAGE_ALTITUDE_DESCEND);
+        int climb = altitude_climb - activity_start.totalClimb;
+        int descend = altitude_descend - activity_start.totalDescend;
 
         // Update the model
         model_set_activity_counters(calories, duration, distance, step_count, climb, descend);
@@ -589,6 +589,7 @@ static void app_deinit() {
   // Stop timers
   if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
   
+  
   // Unsubscribe from services
   connection_service_unsubscribe();
   tick_timer_service_unsubscribe();
@@ -596,6 +597,9 @@ static void app_deinit() {
   
   // De-initialize view
   view_deinit();
+  
+  // Clear messages left in the message queue
+  message_queue_deinit();
   
   // Save configuration
   config_deinit();

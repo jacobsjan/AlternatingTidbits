@@ -52,6 +52,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableCompass);
   if(tuple && (cfgChanged = true)) config->enable_compass = tuple->value->int8;
   #endif
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableCountdown);
+  if(tuple && (cfgChanged = true)) config->enable_countdown = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableError);
   if(tuple && (cfgChanged = true)) config->enable_error = tuple->value->int8;
   #if defined(PBL_HEALTH) 
@@ -66,6 +68,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->enable_weather = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgAlternateMode);
   if(tuple && (cfgChanged = true)) config->alternate_mode = tuple->value->cstring[0]; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgAnimateSwitcher);
+  if(tuple && (cfgChanged = true)) config->switcher_animate = tuple->value->int8;
   
   // Timezone
   tuple = dict_find(iter, MESSAGE_KEY_cfgTimeZoneOffset);
@@ -91,7 +95,17 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->compass_switcher_only = tuple->value->int8;
   #endif 
   
+  // Countdown
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTo);
+  if(tuple && (cfgChanged = true)) config->countdown_to = tuple->value->cstring[0]; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTarget);
+  if(tuple && (cfgChanged = true)) config->countdown_target = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownLabel);
+  if(tuple && (cfgChanged = true)) strncpy(config->countdown_label, tuple->value->cstring, sizeof(config->countdown_label));  
+  
   // Health
+  if(tuple && (cfgChanged = true)) config->health_number_format = tuple->value->cstring[0]; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNormalLine1);
   #if defined(PBL_HEALTH)
   tuple = dict_find(iter, MESSAGE_KEY_cfgHealthStick);
   if(tuple && (cfgChanged = true)) config->health_stick = tuple->value->int8; 
@@ -155,9 +169,9 @@ void config_init() {
     config->vibrate_hourly = false;
     
     config->altitude_unit = 'M';
+    config->health_number_format = 'M';
     #if defined(PBL_HEALTH)
     config->health_distance_unit = 'M';
-    config->health_number_format = 'M';
     #endif
     
     config->enable_timezone = false;
@@ -166,6 +180,7 @@ void config_init() {
     #if defined(PBL_COMPASS)
     config->enable_compass = true;
     #endif
+    config->enable_countdown = false;
     config->enable_error = false;
     #if defined(PBL_HEALTH)
     config->enable_health = true;
@@ -173,7 +188,8 @@ void config_init() {
     config->enable_moonphase = true;
     config->enable_sun = true;
     config->enable_weather = true;
-    config->alternate_mode = 'B';    
+    config->alternate_mode = 'B';
+    config->switcher_animate = true;
     
     config->battery_show_from = 100;
     config->battery_accent_from = 30;
@@ -181,7 +197,7 @@ void config_init() {
     #if defined(PBL_COMPASS)
     config->compass_switcher_only = true;
     #endif
-      
+    
     #if defined(PBL_HEALTH)
     config->health_stick = true;
     config->health_normal_top = HEALTH_EMPTY;

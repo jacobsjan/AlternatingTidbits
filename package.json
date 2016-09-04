@@ -76,7 +76,14 @@
             "cfgEnableAltitude",
             "SubscribeAltitude",
             "UnsubscribeAltitude",
-            "cfgAltitudeUnits"
+            "cfgAltitudeUnits",
+            "cfgAnimateSwitcher",
+            "cfgCountdownTo",
+            "cfgCountdownTarget",
+            "cfgCountdownLabel",
+            "cfgCountdownDate",
+            "cfgCountdownTime",
+            "cfgEnableCountdown"
         ],
         "projectType": "native",
         "resources": {
@@ -111,8 +118,6 @@
         },
         "sdkVersion": "3",
         "targetPlatforms": [
-            "aplite",
-            "basalt",
             "chalk"
         ],
         "uuid": "5e843fcb-4327-40c1-b6f5-3ce0e2356b7b",

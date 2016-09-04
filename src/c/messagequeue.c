@@ -63,3 +63,13 @@ void message_queue_send(Tuplet tuplets[], int tuplet_count) {
 void message_queue_send_tuplet(Tuplet tuplet) {
   message_queue_send((Tuplet[]){ tuplet }, 1);
 }
+
+void message_queue_deinit() {
+  MessageQueue* queue = message_queue;
+  while (queue) {
+    MessageQueue* freeable = queue;
+    queue = queue->next;
+    free(freeable);
+  }
+  message_queue = NULL;
+}

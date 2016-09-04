@@ -176,7 +176,6 @@ module.exports = [
         "messageKey": "cfgHealthNumbers",
         "label": "Number format",
         "defaultValue": 'M',     
-        "capabilities": ["HEALTH"],
         "options": [
           { 
             "label": "1.000,00", 
@@ -227,7 +226,14 @@ module.exports = [
         "type": "toggle",
         "messageKey": "cfgEnableCompass",
         "label": "Compass",
-        "defaultValue": true
+        "defaultValue": true,
+        "capabilities": ["NOT_PLATFORM_DIORITE"]
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableCountdown",
+        "label": "Countdown",
+        "defaultValue": false
       },
       {
         "type": "toggle",
@@ -279,7 +285,13 @@ module.exports = [
             "value": "S" 
           }
         ],
-        "description": "Flick your wrist to start the <strong>switcher</strong> then tap your pebble gently to alternate tibbits."
+        "description": "Flick your wrist to start the <strong>switcher</strong> then tap your pebble gently to alternate tidbits."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgAnimateSwitcher",
+        "label": "Animate switcher",
+        "defaultValue": true
       }
     ]
   },
@@ -352,6 +364,59 @@ module.exports = [
         "label": "Only availble via switcher",
         "description": "As the compass drains the battery quickly, it is strongly recommended to make it only accessible via the switcher.",
         "defaultValue": true
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Countdown"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgCountdownTo",
+        "defaultValue": 'D',
+        "label": "Countdown to/up from:",
+        "options": [
+          { 
+            "label": "Date",
+            "value": 'D'
+          },
+          { 
+            "label": "Time on date", 
+            "value": 'T' 
+          },
+          { 
+            "label": "Time every day", 
+            "value": 'E' 
+          }
+        ]
+      },
+      {
+        "type": "input",
+        "messageKey": "cfgCountdownTime",
+        "label": "Time",
+        "attributes": {
+          "type": "time"
+        }
+      },
+      {
+        "type": "input",
+        "messageKey": "cfgCountdownDate",
+        "label": "Date",
+        "attributes": {
+          "type": "date"
+        }
+      },
+      {
+        "type": "input",
+        "messageKey": "cfgCountdownLabel",
+        "label": "Label",
+        "attributes": {
+          "maxlength": "20"
+        }
       }
     ]
   },
@@ -1022,10 +1087,6 @@ module.exports = [
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
-            "label": "Current nap", 
-            "value": constants.ACTIVITY_DURATION
-          },
-          { 
             "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
@@ -1054,10 +1115,6 @@ module.exports = [
             "value": constants.AVG_TIME_TOTAL_SLEEP 
           },
           { 
-            "label": "Current nap", 
-            "value": constants.ACTIVITY_DURATION
-          },
-          { 
             "label": "Deep sleep today", 
             "value": constants.TIME_DEEP_SLEEP 
           },
@@ -1084,10 +1141,6 @@ module.exports = [
           { 
             "label": "Avg. daily sleep", 
             "value": constants.AVG_TIME_TOTAL_SLEEP 
-          },
-          { 
-            "label": "Current nap", 
-            "value": constants.ACTIVITY_DURATION
           },
           { 
             "label": "Deep sleep today", 

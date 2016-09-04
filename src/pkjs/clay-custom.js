@@ -1,6 +1,16 @@
 module.exports = function(minified) {
   var clayConfig = this;
   
+  function showSwitcherOptions() {
+    if (this.get() === "M") { // Minute only
+      clayConfig.getItemByMessageKey('cfgAnimateSwitcher').hide();
+      this.$element.select('div').set('+hide'); // Hide description
+    } else {
+      clayConfig.getItemByMessageKey('cfgAnimateSwitcher').show();
+      this.$element.select('div').set('-hide'); // Show description
+    }
+  }
+  
   function resizeBatteryAccent() {
     // Resize the accent slider to match the from value
     var batteryShowFrom = clayConfig.getItemByMessageKey('cfgBatteryShowFrom');
@@ -12,6 +22,25 @@ module.exports = function(minified) {
     // Change max of accent slider
     if (batteryAccentFrom.get() > batteryShowFrom.get()) batteryAccentFrom.set(batteryShowFrom.get());
     batteryAccentFrom.$manipulatorTarget.set('@max', batteryShowFrom.get());
+  }
+  
+  function showCountdownTimeDate() {
+    var timeInput = clayConfig.getItemByMessageKey('cfgCountdownTime');
+    var dateInput = clayConfig.getItemByMessageKey('cfgCountdownDate');
+    var label = clayConfig.getItemByMessageKey('cfgCountdownLabel');
+    if (this.get() === "D") { // To date
+      timeInput.hide();
+      dateInput.show();
+      label.$manipulatorTarget.set('@placeholder', 'eg: Holiday');
+    } else if (this.get() === "T") { // To time and date 
+      timeInput.show();
+      dateInput.show();
+      label.$manipulatorTarget.set('@placeholder', 'eg: Party!');
+    } else { // To time every day 
+      timeInput.show();
+      dateInput.hide();
+      label.$manipulatorTarget.set('@placeholder', 'eg: Go home');
+    }
   }
   
   function showWeatherProviderKey() {
@@ -83,12 +112,22 @@ module.exports = function(minified) {
       siblingSection = siblingSection.nextElementSibling;
     }
     
+    // Show/hide swicher options
+    var alternateMode = clayConfig.getItemByMessageKey('cfgAlternateMode');
+    showSwitcherOptions.call(alternateMode);
+    alternateMode.on('change', showSwitcherOptions);
+        
     // Battery show from
     if (clayConfig.getItemByMessageKey('cfgBatteryAccentFrom')) { // Only available on color platforms
       var batteryShowFrom = clayConfig.getItemByMessageKey('cfgBatteryShowFrom');
       batteryShowFrom.on('change', resizeBatteryAccent);
       resizeBatteryAccent();
     }
+    
+    // Countdown show/hide of date and time
+    var countdownTo = clayConfig.getItemByMessageKey('cfgCountdownTo');
+    showCountdownTimeDate.call(countdownTo);
+    countdownTo.on('change', showCountdownTimeDate); 
     
     // Weather provider
     var weatherProvider = clayConfig.getItemByMessageKey('cfgWeatherProvider');

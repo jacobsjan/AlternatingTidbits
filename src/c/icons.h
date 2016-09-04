@@ -17,6 +17,11 @@ char* ICON_ALTITUDE = "\uf1bc";
 char* ICON_COMPASS_ROTATE = "\uf0c1"; 
 #endif
 
+char* ICON_COUNTDOWN_TO_TIME = "\uf150";
+char* ICON_COUNTDOWN_FROM_TIME = "\uf151";
+char* ICON_COUNTDOWN_TO_DATE = "\uf152";
+char* ICON_COUNTDOWN_FROM_DATE = "\uf153";
+
 char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
 char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)
 

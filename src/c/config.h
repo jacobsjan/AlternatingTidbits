@@ -21,6 +21,7 @@ struct Config {
   #if defined(PBL_COMPASS)
   bool enable_compass;
   #endif
+  bool enable_countdown;
   bool enable_error;
   #if defined(PBL_HEALTH)
   bool enable_health;
@@ -29,6 +30,7 @@ struct Config {
   bool enable_sun;
   bool enable_weather;
   char alternate_mode;
+  bool switcher_animate;
   
   int timezone_offset;
   char timezone_city[20];
@@ -42,10 +44,14 @@ struct Config {
   bool compass_switcher_only;
   #endif
   
+  char countdown_to;
+  time_t countdown_target;
+  char countdown_label[30];
+  
+  char health_number_format;
   #if defined(PBL_HEALTH)
   bool health_stick;
   char health_distance_unit;
-  char health_number_format;
   enum HealthIndicator health_normal_top;
   enum HealthIndicator health_normal_middle;
   enum HealthIndicator health_normal_bottom;

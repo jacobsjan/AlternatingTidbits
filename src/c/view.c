@@ -31,6 +31,7 @@ struct Layers {
   #if defined(PBL_COMPASS)
   Layer *compass;
   #endif
+  Layer *countdown;
   Layer *error;
   #if defined(PBL_HEALTH)
   Layer *health;
@@ -119,23 +120,267 @@ void draw_alternating_text(GContext *ctx, GRect bounds, int text_count, char *te
   }
 }
 
-void draw_centered(Layer *layer, GContext *ctx, char* icon, GColor icon_color, int text_count, char *texts[]) { 
+void draw_multi_centered(Layer *layer, GContext *ctx, char* icon, GColor icon_color, int top_text_count, char *top_texts[], int middle_text_count, char *middle_texts[], int bottom_text_count, char *bottom_texts[]) {
   // Calculate center alignment
   GRect bounds = layer_get_bounds(layer);
   GSize icon_size = graphics_text_layout_get_content_size(icon, view.fonts.icons, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
-  GSize text_size = calculate_total_size(bounds, text_count, texts);
-  int total_width = icon_size.w + text_size.w;
+  GSize bottom_text_size = calculate_total_size(bounds, bottom_text_count, bottom_texts);
+  GSize middle_text_size = calculate_total_size(bounds, middle_text_count, middle_texts);
+  GSize top_text_size = calculate_total_size(bounds, top_text_count, top_texts);
+  int max_texts_width = bottom_text_size.w > middle_text_size.w ? bottom_text_size.w : middle_text_size.w;
+  max_texts_width = top_text_size.w > max_texts_width ? top_text_size.w : max_texts_width;
+  int total_width = icon_size.w + max_texts_width;
   int icon_left = bounds.origin.x + (bounds.size.w - total_width) / 2;
   int text_left = icon_left + icon_size.w;
   
-  // Draw icon
-  GRect draw_bounds = GRect(icon_left, bounds.origin.y, icon_size.w, icon_size.h);
+  // Draw the icon
+  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(34, 30), icon_size.w, icon_size.h);
   graphics_context_set_text_color(ctx, icon_color);
   graphics_draw_text(ctx, icon, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+  
+  // Draw the top text
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 40, top_text_size.w, top_text_size.h);
+  draw_alternating_text(ctx, draw_bounds, top_text_count, top_texts);
+  
+  // Draw the middle text
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 20, middle_text_size.w, middle_text_size.h);
+  draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
     
-  // Draw texts
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(6, 4), text_size.w, text_size.h);
-  draw_alternating_text(ctx, draw_bounds, text_count, texts);
+  // Draw the bottom text
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24), bottom_text_size.w, bottom_text_size.h);
+  draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
+}
+
+void draw_centered(Layer *layer, GContext *ctx, char* icon, GColor icon_color, int text_count, char *texts[]) { 
+  draw_multi_centered(layer, ctx, icon, icon_color, 0, NULL, 0, NULL, text_count, texts);
+}
+
+void timezone_update_proc(Layer *layer, GContext *ctx) {
+  // Format the time of the alternative timezone
+  time_t altEpoch = time(NULL) + config->timezone_offset * SECONDS_PER_MINUTE;
+  struct tm *altTime = localtime(&altEpoch);
+    
+  char hour[3];
+  char minute[3];
+  char ampm[3];
+  strftime(hour, sizeof(hour), clock_is_24h_style() ? "%H" : "%I", altTime);
+  strftime(minute, sizeof(minute), "%M", altTime);
+  if (clock_is_24h_style()) {
+    ampm[0] = 0;
+  } else {
+    strftime(ampm, sizeof(ampm), "%p", altTime);
+    ampm[0] -= 'A' - 'a';
+    ampm[1] -= 'A' - 'a';
+  }
+  
+  // Remove hours leading zero
+  if (hour[0] == '0' && !config->date_hours_leading_zero) {
+    hour[0] = hour[1];
+    hour[1] = hour[2];
+  }
+  
+  // Make sure we leave the localtime behind in a good state
+  altEpoch = time(NULL);
+  localtime(&altEpoch);
+  
+  char* bottom_texts[] = { config->timezone_city };
+  int bottom_text_count = 1;
+  char* middle_texts[] = { hour, ":", minute, " ", ampm };
+  int middle_text_count = 5;
+  
+  // Draw
+  draw_multi_centered(layer, ctx, ICON_TIMEZONE, config->color_secondary, 0, NULL, middle_text_count, middle_texts, bottom_text_count, bottom_texts);
+}
+
+void altitude_update_proc(Layer *layer, GContext *ctx) { 
+  static char before_point[4];
+  static char after_point[4];
+  char **texts;
+  
+  int metric = model->altitude;
+  if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
+  if (metric < 1000) {
+    snprintf(before_point, sizeof(before_point), "%d", metric);
+    if (config->altitude_unit == 'M') {
+      static char *temp[] = { before_point,  "m", NULL, NULL };
+      texts = temp;
+    } else {
+      static char *temp[] = { before_point,  "ft", NULL, NULL };
+      texts = temp;
+    }
+  } else {
+    snprintf(before_point, sizeof(before_point), "%d", metric / 1000);
+    snprintf(after_point, sizeof(after_point), "%03d", metric % 1000);
+    if (config->altitude_unit == 'M') {
+      if (config->health_number_format == 'M') {
+        static char *temp[] = { before_point, ",", after_point, "m" };
+        texts = temp;
+      } else {
+        static char *temp[] = { before_point, ".", after_point, "m" };
+        texts = temp;
+      }
+    } else {
+      if (config->health_number_format == 'M') {
+        static char *temp[] = { before_point, ",", after_point, "ft" };
+        texts = temp;
+      } else {
+        static char *temp[] = { before_point, ".", after_point, "ft" };
+        texts = temp;
+      }
+    }
+  }  
+  
+  // Draw
+  draw_centered(layer, ctx, ICON_ALTITUDE, config->color_secondary, 4, texts);
+}
+
+void battery_update_proc(Layer *layer, GContext *ctx) {
+  int battery_charge = model->battery_charge;
+  if (battery_charge == 0 && !model->battery_plugged) {
+    battery_charge = 5; 
+  } else if (battery_charge > 0 && model->battery_plugged) {
+    battery_charge += 30;
+  }
+  
+  char* battery_icon = icons_get_battery_symbol(battery_charge, model->battery_charging, model->battery_plugged);
+  char charge[5];
+  if (battery_charge == 0 && model->battery_plugged) {
+    strncpy(charge, "< 40", sizeof(charge));
+  } else {
+    snprintf(charge, sizeof(charge) / sizeof(charge[0]), "%d", battery_charge);
+  }
+  
+  // Draw
+  char *texts[] = { charge, "%" };
+  GColor battery_color = battery_charge <= config->battery_accent_from ? config->color_accent : config->color_secondary;
+  draw_centered(layer, ctx, battery_icon, battery_color, sizeof(texts) / sizeof(texts[0]), texts);
+}
+
+#if defined(PBL_COMPASS)
+static void compass_update_proc(Layer *layer, GContext *ctx) {    
+  // Subscribe to compass heading updates, unsubscibe in compass_heading_changed
+  if (!(model->update_req & UPDATE_COMPASS)) {
+    model_add_update_req(UPDATE_COMPASS);
+  }
+  
+  // Decide on compass icon
+  char* icon;
+  if (model->compass_heading.compass_status != CompassStatusDataInvalid) {
+    int degrees = TRIGANGLE_TO_DEG(model->compass_heading.magnetic_heading);
+    icon = icons_get_compass(degrees);
+  } else {
+    icon = ICON_COMPASS_ROTATE;
+  }
+  
+  // Calculate center alignment
+  GRect bounds = layer_get_bounds(layer);
+  GSize icon_size = graphics_text_layout_get_content_size(icon, view.fonts.icons_large, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
+  int icon_left = bounds.origin.x + (bounds.size.w - icon_size.w) / 2;
+  
+  // Draw the compass
+  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(8, 4), icon_size.w, icon_size.h);
+  graphics_context_set_text_color(ctx, config->color_secondary);
+  graphics_draw_text(ctx, icon, view.fonts.icons_large, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+}
+#endif
+
+static void countdown_update_proc(Layer *layer, GContext *ctx) {
+  time_t now = time(NULL);
+  char* countdown_icon;
+  char* pre_text;
+  char* post_text;
+  int diff;
+  
+  // Choose icon and calculate diff
+  time_t target = config->countdown_target;
+  if (config->countdown_to == 'E') {
+    time_t rounded_now = (now / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE; 
+    target = target % SECONDS_PER_DAY + (rounded_now / SECONDS_PER_DAY) * SECONDS_PER_DAY;
+  }
+  if (target > now) {
+    // Count down to
+    pre_text = "in ";
+    post_text = NULL;    
+    time_t rounded_now; 
+    if (config->countdown_to == 'D') {
+      countdown_icon = ICON_COUNTDOWN_TO_DATE;
+      rounded_now = (now / SECONDS_PER_DAY) * SECONDS_PER_DAY; 
+    } else  {
+      countdown_icon = ICON_COUNTDOWN_TO_TIME;
+      rounded_now = (now / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE; 
+    }
+    diff = target - rounded_now;
+  } else {
+    // Count down to
+    pre_text = NULL;
+    post_text = " ago";
+    time_t rounded_now;
+    if (config->countdown_to == 'D') {
+      countdown_icon = ICON_COUNTDOWN_FROM_DATE;
+      rounded_now = (now / SECONDS_PER_DAY) * SECONDS_PER_DAY; 
+    } else {
+      countdown_icon = ICON_COUNTDOWN_FROM_TIME;
+      rounded_now = (now / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE; 
+    } 
+    diff = rounded_now - target;
+  }
+  
+  // Determine count and unit
+  int count;
+  char* unit;
+  char count_text[6];
+  if (diff == 0) {
+    pre_text = NULL;
+    unit = NULL;
+    post_text = NULL;
+    if (config->countdown_to == 'D') {
+      strncpy(count_text, "Today", sizeof(count_text));
+    } else {
+      strncpy(count_text, "Now", sizeof(count_text));
+    }
+  } else {
+    if (diff > 3 * 365 * SECONDS_PER_DAY) {
+      count = diff / (365 * SECONDS_PER_DAY);
+      unit = " years";
+    } else if (diff > 3 * 30 * SECONDS_PER_DAY) {
+      count = diff / (30 * SECONDS_PER_DAY);
+      unit = " months";
+    } else if (diff > 3 * 7 * SECONDS_PER_DAY) {
+      count = diff / (7 * SECONDS_PER_DAY);
+      unit = " weeks";
+    } else if (diff > 3 * SECONDS_PER_DAY) {
+      count = diff / SECONDS_PER_DAY;
+      unit = " days";
+    } else if (config->countdown_to == 'D') {
+      if (diff > SECONDS_PER_DAY) {
+        count = diff / SECONDS_PER_DAY;
+        unit = " days";      
+      } else if (config->countdown_target > now && (config->countdown_target - now) < 12 * SECONDS_PER_HOUR) {
+        count = 1;
+        unit = " night";      
+      } else {
+        count = 1;
+        unit = " day";      
+      }
+    } else if (diff > 3 * SECONDS_PER_HOUR) {
+      count = diff / SECONDS_PER_HOUR;
+      unit = " hours";
+    } else if (diff > SECONDS_PER_MINUTE) {
+      count = diff / SECONDS_PER_MINUTE;
+      unit = " minutes";
+    } else {
+      count = 1;
+      unit = " minute";   
+    }
+    
+    snprintf(count_text, sizeof(count_text), "%d", count);
+  }
+  
+  char *middle_texts[] = { config->countdown_label }; 
+  char *bottom_texts[] = { pre_text, count_text, unit, NULL, post_text }; 
+  
+  // Draw
+  draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
 }
 
 void error_update_proc(Layer *layer, GContext *ctx) { 
@@ -175,174 +420,6 @@ void error_update_proc(Layer *layer, GContext *ctx) {
   GColor symbol_color = model->error == ERROR_NONE ? config->color_secondary : config->color_accent;
   draw_centered(layer, ctx, symbol, symbol_color, sizeof(texts) / sizeof(texts[0]), texts);
 }
-
-void timezone_update_proc(Layer *layer, GContext *ctx) {
-  const int SEPARATOR = 4;
-  
-  // Format the time of the alternative timezone
-  time_t altEpoch = time(NULL) + config->timezone_offset * SECONDS_PER_MINUTE;
-  struct tm *altTime = localtime(&altEpoch);
-    
-  char hour[3];
-  char minute[3];
-  char ampm[3];
-  strftime(hour, sizeof(hour), clock_is_24h_style() ? "%H" : "%I", altTime);
-  strftime(minute, sizeof(minute), "%M", altTime);
-  if (clock_is_24h_style()) {
-    ampm[0] = 0;
-  } else {
-    strftime(ampm, sizeof(ampm), "%p", altTime);
-    ampm[0] -= 'A' - 'a';
-    ampm[1] -= 'A' - 'a';
-  }
-  
-  // Remove hours leading zero
-  if (hour[0] == '0' && !config->date_hours_leading_zero) {
-    hour[0] = hour[1];
-    hour[1] = hour[2];
-  }
-  
-  // Make sure we leave the localtime behind in a good state
-  altEpoch = time(NULL);
-  localtime(&altEpoch);
-  
-  char* bottom_texts[] = { config->timezone_city };
-  int bottom_text_count = 1;
-  char* middle_texts[] = { hour, ":", minute, " ", ampm };
-  int middle_text_count = 5;
-  
-  // Calculate center alignment
-  GRect bounds = layer_get_bounds(layer);
-  GSize icon_size = graphics_text_layout_get_content_size(ICON_TIMEZONE, view.fonts.icons, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
-  GSize bottom_text_size = calculate_total_size(bounds, bottom_text_count, bottom_texts);
-  GSize middle_text_size = calculate_total_size(bounds, middle_text_count, middle_texts);
-  int max_texts_width = bottom_text_size.w > middle_text_size.w ? bottom_text_size.w : middle_text_size.w;
-  int total_width = icon_size.w + SEPARATOR + max_texts_width;
-  int icon_left = bounds.origin.x + (bounds.size.w - total_width) / 2;
-  int text_left = icon_left + SEPARATOR + icon_size.w;
-  
-  // Draw the timezone icon
-  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(34, 30), icon_size.w, icon_size.h);
-  graphics_context_set_text_color(ctx, config->color_secondary);
-  graphics_draw_text(ctx, ICON_TIMEZONE, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-  
-  // Draw the time
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 20, middle_text_size.w, middle_text_size.h);
-  draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
-    
-  // Draw the city
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24), bottom_text_size.w, bottom_text_size.h);
-  draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
-}
-
-void weather_update_proc(Layer *layer, GContext *ctx) {
-  char* condition = icons_get_weather_condition_symbol(model->weather_condition, is_daytime());
-  char temperature[6];
-  snprintf(temperature, sizeof(temperature), "%d", model->weather_temperature);
-  
-  // Draw
-  char *texts[] = { " ", NULL, temperature, "\u00b0"}; // Degree symbol
-  draw_centered(layer, ctx, condition, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
-}
-
-void sunrise_sunset_update_proc(Layer *layer, GContext *ctx) {
-  bool daytime = is_daytime();
-  char* symbol = daytime ? ICON_SUNSET : ICON_SUNRISE; 
-  char hour[3];
-  char minute[3];
-  snprintf(hour, sizeof(hour), "%d", (daytime ? model->sunset : model->sunrise) / 60);
-  snprintf(minute, sizeof(minute), "%02d", (daytime ? model->sunset : model->sunrise) % 60);
-  
-  // Draw
-  char *texts[] = { " ", NULL, hour, ":", minute}; 
-  draw_centered(layer, ctx, symbol, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
-}
-
-void altitude_update_proc(Layer *layer, GContext *ctx) { 
-  static char before_point[4];
-  static char after_point[4];
-  char **texts;
-  
-  int metric = model->altitude;
-  if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
-  if (metric < 1000) {
-    snprintf(before_point, sizeof(before_point), "%d", metric);
-    if (config->altitude_unit == 'M') {
-      static char *temp[] = { before_point,  "m", NULL, NULL };
-      texts = temp;
-    } else {
-      static char *temp[] = { before_point,  "ft", NULL, NULL };
-      texts = temp;
-    }
-  } else {
-    snprintf(before_point, sizeof(before_point), "%d", metric / 1000);
-    snprintf(after_point, sizeof(after_point), "%03d", metric % 1000);
-    if (config->altitude_unit == 'M') {
-      static char *temp[] = { before_point, ".", after_point, "m" };
-      texts = temp;
-    } else {
-      static char *temp[] = { before_point, ".", after_point, "ft" };
-      texts = temp;
-    }
-  }   
-  
-  // Draw
-  draw_centered(layer, ctx, ICON_ALTITUDE, config->color_secondary, 4, texts);
-}
-
-void battery_update_proc(Layer *layer, GContext *ctx) {
-  int battery_charge = model->battery_charge;
-  if (battery_charge == 0 && !model->battery_plugged) {
-    battery_charge = 5; 
-  } else if (battery_charge > 0 && model->battery_plugged) {
-    battery_charge += 30;
-  }
-  
-  char* battery_icon = icons_get_battery_symbol(battery_charge, model->battery_charging, model->battery_plugged);
-  char charge[5];
-  if (battery_charge == 0 && model->battery_plugged) {
-    charge[0] = '<';
-    charge[1] = ' ';
-    charge[2] = '4';
-    charge[3] = '0';
-    charge[4] = 0;
-  } else {
-    snprintf(charge, sizeof(charge) / sizeof(charge[0]), "%d", battery_charge);
-  }
-  
-  // Draw
-  char *texts[] = { charge, "%" };
-  GColor battery_color = battery_charge <= config->battery_accent_from ? config->color_accent : config->color_secondary;
-  draw_centered(layer, ctx, battery_icon, battery_color, sizeof(texts) / sizeof(texts[0]), texts);
-}
-
-#if defined(PBL_COMPASS)
-static void compass_update_proc(Layer *layer, GContext *ctx) {    
-  // Subscribe to compass heading updates, unsubscibe in compass_heading_changed
-  if (!(model->update_req & UPDATE_COMPASS)) {
-    model_add_update_req(UPDATE_COMPASS);
-  }
-  
-  // Decide on compass icon
-  char* icon;
-  if (model->compass_heading.compass_status != CompassStatusDataInvalid) {
-    int degrees = TRIGANGLE_TO_DEG(model->compass_heading.magnetic_heading);
-    icon = icons_get_compass(degrees);
-  } else {
-    icon = ICON_COMPASS_ROTATE;
-  }
-  
-  // Calculate center alignment
-  GRect bounds = layer_get_bounds(layer);
-  GSize icon_size = graphics_text_layout_get_content_size(icon, view.fonts.icons_large, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
-  int icon_left = bounds.origin.x + (bounds.size.w - icon_size.w) / 2;
-  
-  // Draw the compass
-  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(8, 4), icon_size.w, icon_size.h);
-  graphics_context_set_text_color(ctx, config->color_secondary);
-  graphics_draw_text(ctx, icon, view.fonts.icons_large, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-}
-#endif
 
 #if defined(PBL_HEALTH)
 char* alloc_print_d(char* fmt, int i) {
@@ -480,8 +557,7 @@ char** health_generate_texts(enum HealthIndicator indicator) {
 }
 
 void health_update_proc(Layer *layer, GContext *ctx) {
-  const int SEPARATOR = 4;
-  const char* health_icon;  
+  char* health_icon;  
   char** bottom_texts;
   char** middle_texts;
   char** top_texts;
@@ -521,34 +597,8 @@ void health_update_proc(Layer *layer, GContext *ctx) {
   int middle_text_count = middle_texts ? 4 : 0;
   int bottom_text_count = bottom_texts ? 4 : 0;
   
-  // Calculate center alignment
-  GRect bounds = layer_get_bounds(layer);
-  GSize icon_size = graphics_text_layout_get_content_size(health_icon, view.fonts.icons, bounds, GTextOverflowModeWordWrap, GTextAlignmentRight);
-  GSize bottom_text_size = calculate_total_size(bounds, bottom_text_count, bottom_texts);
-  GSize middle_text_size = calculate_total_size(bounds, middle_text_count, middle_texts);
-  GSize top_text_size = calculate_total_size(bounds, top_text_count, top_texts);
-  int max_texts_width = bottom_text_size.w > middle_text_size.w ? bottom_text_size.w : middle_text_size.w;
-  max_texts_width = top_text_size.w > max_texts_width ? top_text_size.w : max_texts_width;
-  int total_width = icon_size.w + SEPARATOR + max_texts_width;
-  int icon_left = bounds.origin.x + (bounds.size.w - total_width) / 2;
-  int text_left = icon_left + SEPARATOR + icon_size.w;
-  
-  // Draw the health icon
-  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(34, 30), icon_size.w, icon_size.h);
-  graphics_context_set_text_color(ctx, config->color_secondary);
-  graphics_draw_text(ctx, health_icon, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-  
-  // Draw the top text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 40, top_text_size.w, top_text_size.h);
-  draw_alternating_text(ctx, draw_bounds, top_text_count, top_texts);
-  
-  // Draw the middle text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 20, middle_text_size.w, middle_text_size.h);
-  draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
-    
-  // Draw the bottom text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24), bottom_text_size.w, bottom_text_size.h);
-  draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
+  // Draw
+  draw_multi_centered(layer, ctx, health_icon, config->color_secondary, top_text_count, top_texts, middle_text_count, middle_texts, bottom_text_count, bottom_texts);
   
   // Free allocated memory
   if (top_texts) {
@@ -583,6 +633,29 @@ void moonphase_update_proc(Layer *layer, GContext *ctx) {
   // Draw
   char *texts[] = { " ", NULL, illumination, "%"}; 
   draw_centered(layer, ctx, moon_icon, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
+}
+
+void weather_update_proc(Layer *layer, GContext *ctx) {
+  char* condition = icons_get_weather_condition_symbol(model->weather_condition, is_daytime());
+  char temperature[6];
+  snprintf(temperature, sizeof(temperature), "%d", model->weather_temperature);
+  
+  // Draw
+  char *texts[] = { " ", NULL, temperature, "\u00b0"}; // Degree symbol
+  draw_centered(layer, ctx, condition, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
+}
+
+void sunrise_sunset_update_proc(Layer *layer, GContext *ctx) {
+  bool daytime = is_daytime();
+  char* symbol = daytime ? ICON_SUNSET : ICON_SUNRISE; 
+  char hour[3];
+  char minute[3];
+  snprintf(hour, sizeof(hour), "%d", (daytime ? model->sunset : model->sunrise) / 60);
+  snprintf(minute, sizeof(minute), "%02d", (daytime ? model->sunset : model->sunrise) % 60);
+  
+  // Draw
+  char *texts[] = { " ", NULL, hour, ":", minute}; 
+  draw_centered(layer, ctx, symbol, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
 void date_update_proc(Layer *layer, GContext *ctx, char* format) {
@@ -839,6 +912,23 @@ void alternating_layers_remove(Layer* layer) {
   } 
 }
 
+Layer* alternating_layers_create(LayerUpdateProc update_proc, char* icon) {
+  Layer *window_layer = window_get_root_layer(view.window);
+  GRect bounds = layer_get_bounds(window_layer);
+
+  Layer *layer = layer_create(GRect(0, 0, bounds.size.w, PBL_IF_ROUND_ELSE(68, 62)));
+  layer_set_update_proc(layer, update_proc);
+  alternating_layers_add(layer, icon);
+  
+  return layer;
+}
+
+Layer* alternating_layers_destroy(Layer* layer) {
+  alternating_layers_remove(layer);
+  layer_destroy(layer);
+  return NULL;
+}
+
 void time_changed() {
   // Write the current time, weekday and date into buffers
   static char s_hour_buffer[3];
@@ -884,30 +974,17 @@ void evaluate_altitude_req() {
 void altitude_changed() {
   if (view.layers.altitude == NULL) {
     // Create altitude layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.altitude = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.altitude, altitude_update_proc);
-    alternating_layers_add(view.layers.altitude, ICON_ALTITUDE);
-  } 
-  
+    view.layers.altitude = alternating_layers_create(altitude_update_proc, ICON_ALTITUDE);
+  }   
 }
 
 void battery_changed() {
   if (view.layers.battery == NULL && model->battery_charge <= config->battery_show_from) {
     // Create battery layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.battery = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.battery, battery_update_proc);
-    alternating_layers_add(view.layers.battery, icons_get_battery_symbol(70, false, false));
+    view.layers.battery = alternating_layers_create(battery_update_proc, icons_get_battery_symbol(70, false, false));
   } else if (view.layers.battery != NULL && model->battery_charge > config->battery_show_from) {
     // Destroy battery layer
-    alternating_layers_remove(view.layers.battery);
-    layer_destroy(view.layers.battery);
-    view.layers.battery = NULL;
+    view.layers.battery = alternating_layers_destroy(view.layers.battery);
   }
 }
 
@@ -926,20 +1003,13 @@ void compass_heading_changed() {
 void compass_enable_changed() {
   if (view.layers.compass == NULL && config->enable_compass && (!config->compass_switcher_only || view.layers.switcher != NULL)) {    
     // Create compass layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.compass = layer_create(GRect(0, 0, bounds.size.w, 60 +  PBL_IF_ROUND_ELSE(34, 30)));
-    layer_set_update_proc(view.layers.compass, compass_update_proc);
-    alternating_layers_add(view.layers.compass, icons_get_compass(0)); 
+    view.layers.compass = alternating_layers_create(compass_update_proc, icons_get_compass(0)); 
   } else if (view.layers.compass != NULL && (config->compass_switcher_only && view.layers.switcher == NULL)) {
     // Unsubscribe from compass events, subsbribe in compass_update_proc
     model_remove_update_req(UPDATE_COMPASS);
     
     // Destroy compass layer
-    alternating_layers_remove(view.layers.compass);
-    layer_destroy(view.layers.compass);
-    view.layers.compass = NULL;    
+    view.layers.compass = alternating_layers_destroy(view.layers.compass);   
   }
 }
 #endif
@@ -947,24 +1017,14 @@ void compass_enable_changed() {
 void weather_changed() {
   if (view.layers.weather == NULL) {
     // Create weather layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.weather = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.weather, weather_update_proc);
-    alternating_layers_add(view.layers.weather, icons_get_weather_condition_symbol(CONDITION_CLOUDY, true));
+    view.layers.weather = alternating_layers_create(weather_update_proc, icons_get_weather_condition_symbol(CONDITION_CLOUDY, true));
   }
 }
 
 void sunrise_sunset_changed() {
   if (view.layers.sunrise_sunset == NULL) {
     // Create sunrise layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.sunrise_sunset = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.sunrise_sunset, sunrise_sunset_update_proc);
-    alternating_layers_add(view.layers.sunrise_sunset, ICON_SUNRISE);
+    view.layers.sunrise_sunset = alternating_layers_create(sunrise_sunset_update_proc, ICON_SUNRISE);
   }
 }
 
@@ -973,12 +1033,7 @@ void activity_changed() {
   // Make sure the layer exists
   if (view.layers.health == NULL) {
     // Create health layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.health = layer_create(GRect(0, 0, bounds.size.w, 60 + PBL_IF_ROUND_ELSE(34, 30)));
-    layer_set_update_proc(view.layers.health, health_update_proc);
-    alternating_layers_add(view.layers.health, ICON_WALK);
+    view.layers.health = alternating_layers_create(health_update_proc, ICON_WALK);
   }
   
   // Suspend alternating when walking, running or sleeping
@@ -1004,11 +1059,9 @@ void evaluate_moonphase_req() {
   } else {
     model_remove_update_req(UPDATE_MOONPHASE);
     
-    if (view.layers.moonphase != NULL) {
+    if (view.layers.moonphase) {
       // Destroy moonphase layer
-      alternating_layers_remove(view.layers.moonphase);
-      layer_destroy(view.layers.moonphase);
-      view.layers.moonphase = NULL;
+      view.layers.moonphase = alternating_layers_destroy(view.layers.moonphase);
     }
   }
 }
@@ -1016,18 +1069,13 @@ void evaluate_moonphase_req() {
 void moonphase_changed() {
   if (view.layers.moonphase == NULL) {
     // Create moonphase layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-    
-    view.layers.moonphase = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.moonphase, moonphase_update_proc);
-    alternating_layers_add(view.layers.moonphase, icons_get_moonphase(120));
+    view.layers.moonphase = alternating_layers_create(moonphase_update_proc, icons_get_moonphase(120));
   } 
 }
 
 void switcher_timeout_callback(void *data) {
   // Destroy the layer
-  if (view.layers.switcher) {
+  if (view.layers.switcher != NULL) {
     layer_remove_from_parent(view.layers.switcher);
     layer_destroy(view.layers.switcher);    
     view.layers.switcher = NULL;
@@ -1097,7 +1145,7 @@ static void switcher_animation_teardown(Animation *animation) {
 void tapped() {
   if (view.layers.switcher) {
     // Initialize switcher animation to start
-    view.switcher_animation_progress = 0;
+    if (config->switcher_animate) view.switcher_animation_progress = 0;
     
     // Alternate to the next available layer
     if (view.alt_layer_count > 0) { 
@@ -1105,7 +1153,7 @@ void tapped() {
     }
     
     // Animate the layer queue
-    if (!view.switcher_animation) {
+    if (config->switcher_animate && !view.switcher_animation) {
       view.switcher_animation = animation_create();
       animation_set_duration(view.switcher_animation, 250);
       static const AnimationImplementation implementation = {
@@ -1133,9 +1181,7 @@ static void alert_timeout_handler(void *context) {
     
   // Remove error layer when no longer in error or when errors are disabled
   if (model->error == ERROR_NONE || !config->enable_error) {
-    alternating_layers_remove(view.layers.error);
-    layer_destroy(view.layers.error);
-    view.layers.error = NULL;
+    view.layers.error = alternating_layers_destroy(view.layers.error);
   }
 }
 
@@ -1143,12 +1189,7 @@ void error_changed(enum ErrorCodes prevError) {
   // Check if error layer is allready visible
   if (view.layers.error == NULL) {
     // Create error layer
-    Layer *window_layer = window_get_root_layer(view.window);
-    GRect bounds = layer_get_bounds(window_layer);
-
-    view.layers.error = layer_create(GRect(0, PBL_IF_ROUND_ELSE(34, 30), bounds.size.w, 60));
-    layer_set_update_proc(view.layers.error, error_update_proc);
-    alternating_layers_add(view.layers.error, ICON_BLUETOOTH);
+    view.layers.error = alternating_layers_create(error_update_proc, ICON_BLUETOOTH);
   }
   
   // Set suspension
@@ -1194,7 +1235,7 @@ void main_window_load(Window *window) {
 
   // Create and add the hour layer
   view.layers.hour = text_layer_create(
-      GRect(0, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w / 2 - 4, 54));
+      GRect(0, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w / 2 - 4, 60));
   text_layer_set_background_color(view.layers.hour, GColorClear);
   text_layer_set_text_color(view.layers.hour, config->color_primary);
   text_layer_set_text_alignment(view.layers.hour, GTextAlignmentRight);
@@ -1203,7 +1244,7 @@ void main_window_load(Window *window) {
   
   // Create and add the colon layer, I like my colon exactly in the middle
   view.layers.colon = text_layer_create(
-      GRect(0, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w, 54));
+      GRect(0, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w, 60));
   text_layer_set_background_color(view.layers.colon, GColorClear);
   text_layer_set_text_color(view.layers.colon, config->color_accent);
   text_layer_set_text_alignment(view.layers.colon, GTextAlignmentCenter);
@@ -1213,7 +1254,7 @@ void main_window_load(Window *window) {
   
   // Create and add the minute layer
   view.layers.minute = text_layer_create(
-      GRect(bounds.size.w / 2 + 4, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w / 2 - 4, 54));
+      GRect(bounds.size.w / 2 + 4, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w / 2 - 4, 60));
   text_layer_set_background_color(view.layers.minute, GColorClear);
   text_layer_set_text_color(view.layers.minute, config->color_primary);
   text_layer_set_text_alignment(view.layers.minute, GTextAlignmentLeft);
@@ -1232,30 +1273,29 @@ void main_window_load(Window *window) {
   layer_set_update_proc(view.layers.date_bottom, update_proc);
   layer_add_child(window_layer, view.layers.date_bottom);
   
-  // Create the timezone layer
-  if (config->enable_timezone) {    
-    view.layers.timezone = layer_create(GRect(0, 0, bounds.size.w, 60 + PBL_IF_ROUND_ELSE(34, 30)));
-    layer_set_update_proc(view.layers.timezone, timezone_update_proc);
-    alternating_layers_add(view.layers.timezone, ICON_TIMEZONE);
-  }
+  // Create non-model update besed alternating layers
+  if (config->enable_timezone) view.layers.timezone = alternating_layers_create(timezone_update_proc, ICON_TIMEZONE);
+  if (config->enable_countdown) view.layers.countdown = alternating_layers_create(countdown_update_proc, ICON_COUNTDOWN_TO_TIME);  
   
   // Update time text
   time_changed();
 }
 
 void main_window_unload(Window *window) {
-  // Destroy TextLayers
+  // Destroy base layers
   text_layer_destroy(view.layers.hour);
   text_layer_destroy(view.layers.colon);
   text_layer_destroy(view.layers.minute);
   layer_destroy(view.layers.date_top);
   layer_destroy(view.layers.date_bottom);
   
+  // Destroy alternating layers
   if (view.layers.battery) layer_destroy(view.layers.battery);
   if (view.layers.altitude) layer_destroy(view.layers.altitude);
   #if defined(PBL_COMPASS)
   if (view.layers.compass) layer_destroy(view.layers.compass);
   #endif
+  if (view.layers.countdown) layer_destroy(view.layers.countdown);
   if (view.layers.error) layer_destroy(view.layers.error);
   if (view.layers.weather) layer_destroy(view.layers.weather);
   if (view.layers.sunrise_sunset) layer_destroy(view.layers.sunrise_sunset);

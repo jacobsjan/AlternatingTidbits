@@ -70,6 +70,33 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
   dict[keys.cfgTimeZoneOffset] = timezoneOffset;
   
+  // Convert countdown time/date to posix format
+  var timeElems = dict[keys.cfgCountdownTime].split(':');
+  var dateElems = dict[keys.cfgCountdownDate].split('-');
+  var d;
+  if (dict[keys.cfgCountdownTo] == 'D') {
+    if (dateElems.length == 3) {
+      d = new Date(Date.UTC(dateElems[0], parseInt(dateElems[1]) - 1, dateElems[2])); 
+    } else {
+      dict[keys.cfgEnableCountdown] = 0;
+    }
+  } else if (dict[keys.cfgCountdownTo] == 'T') {
+    if (dateElems.length == 3 && timeElems.length == 2) {
+      d = new Date(dateElems[0], parseInt(dateElems[1]) - 1, dateElems[2], timeElems[0], timeElems[1], 0, 0); 
+    } else {
+      dict[keys.cfgEnableCountdown] = 0;
+    }
+  } else {
+    if (timeElems.length == 2) {
+      d = new Date(1970, 0, 1, timeElems[0], timeElems[1], 0, 0); 
+    } else {
+      dict[keys.cfgEnableCountdown] = 0;
+    }
+  }
+  if (d) dict[keys.cfgCountdownTarget] = d.getTime() / 1000;
+  dict[keys.cfgCountdownTime] = '';
+  dict[keys.cfgCountdownDate] = '';
+  
   // Convert health indicators to int
   dict[keys.cfgHealthNormalLine1] = parseInt(dict[keys.cfgHealthNormalLine1]);
   dict[keys.cfgHealthNormalLine2] = parseInt(dict[keys.cfgHealthNormalLine2]);
@@ -172,7 +199,7 @@ function fetchAltitude() {
       var currentAltitude = position.coords.altitude;
       
       // Validate that the altitude has changed before sending it to the watch
-      if (Math.abs(currentAltitude - lastSubmittedAltitude) > position.coords.altitudeAccuracy / 2) {
+      if (Math.abs(currentAltitude - lastSubmittedAltitude) > 1) { //position.coords.altitudeAccuracy / 2) {
         lastSubmittedAltitude = currentAltitude;
         sendMessage({
           'Altitude': Math.round(currentAltitude)

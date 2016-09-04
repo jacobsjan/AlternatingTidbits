@@ -1,9 +1,6 @@
 #pragma once
 #include<pebble.h>
 
-// In wait of SDK 4.0
-#define PBL_COMPASS
-
 enum WeatherCondition {
   CONDITION_CLEAR = 0,
   CONDITION_CLOUDY,
