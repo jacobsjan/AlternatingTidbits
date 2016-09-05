@@ -44,9 +44,10 @@ struct Config {
   bool compass_switcher_only;
   #endif
   
+  char countdown_label[30];
   char countdown_to;
   time_t countdown_target;
-  char countdown_label[30];
+  char countdown_display;
   
   char health_number_format;
   #if defined(PBL_HEALTH)

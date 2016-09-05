@@ -83,7 +83,8 @@
             "cfgCountdownLabel",
             "cfgCountdownDate",
             "cfgCountdownTime",
-            "cfgEnableCountdown"
+            "cfgEnableCountdown",
+            "cfgCountdownDisplay"
         ],
         "projectType": "native",
         "resources": {

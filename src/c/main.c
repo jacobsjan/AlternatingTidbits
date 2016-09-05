@@ -568,7 +568,7 @@ static void app_init() {
   view_init();
   
   // Set up watch communication
-  const uint32_t inbox_size = 640;
+  const uint32_t inbox_size = 700;
   const uint32_t outbox_size = 64;
   app_message_register_inbox_received(&msg_received_handler);
   app_message_register_outbox_sent(&message_queue_sent_handler);

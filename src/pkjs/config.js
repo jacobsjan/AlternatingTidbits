@@ -375,6 +375,14 @@ module.exports = [
         "defaultValue": "Countdown"
       },
       {
+        "type": "input",
+        "messageKey": "cfgCountdownLabel",
+        "label": "Label",
+        "attributes": {
+          "maxlength": "20"
+        }
+      },
+      {
         "type": "select",
         "messageKey": "cfgCountdownTo",
         "defaultValue": 'D',
@@ -389,7 +397,7 @@ module.exports = [
             "value": 'T' 
           },
           { 
-            "label": "Time every day", 
+            "label": "Daily time", 
             "value": 'E' 
           }
         ]
@@ -411,12 +419,21 @@ module.exports = [
         }
       },
       {
-        "type": "input",
-        "messageKey": "cfgCountdownLabel",
-        "label": "Label",
-        "attributes": {
-          "maxlength": "20"
-        }
+        "type": "radiogroup",
+        "messageKey": "cfgCountdownDisplay",
+        "defaultValue": 'F',
+        "label": "Display mode",
+        "options": [
+          { 
+            "label": "Full detail", 
+            "value": 'F' 
+          },
+          { 
+            "label": "Incremental detail",
+            "value": 'I'
+          }
+        ],
+        "description": "'in 4w 3d 22h 5m' vs. 'in 4 weeks'"
       }
     ]
   },

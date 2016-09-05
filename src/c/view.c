@@ -285,60 +285,117 @@ static void compass_update_proc(Layer *layer, GContext *ctx) {
 #endif
 
 static void countdown_update_proc(Layer *layer, GContext *ctx) {
-  time_t now = time(NULL);
   char* countdown_icon;
   char* pre_text;
   char* post_text;
   int diff;
   
   // Choose icon and calculate diff
+  time_t now = config->countdown_to == 'D' ? time_start_of_today() : (time(NULL) / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE;
   time_t target = config->countdown_target;
-  if (config->countdown_to == 'E') {
-    time_t rounded_now = (now / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE; 
-    target = target % SECONDS_PER_DAY + (rounded_now / SECONDS_PER_DAY) * SECONDS_PER_DAY;
-  }
+  if (config->countdown_to == 'E') target += time_start_of_today();
   if (target > now) {
     // Count down to
     pre_text = "in ";
     post_text = NULL;    
-    time_t rounded_now; 
     if (config->countdown_to == 'D') {
-      countdown_icon = ICON_COUNTDOWN_TO_DATE;
-      rounded_now = (now / SECONDS_PER_DAY) * SECONDS_PER_DAY; 
+      countdown_icon = ICON_COUNTDOWN_TO_DATE; 
     } else  {
       countdown_icon = ICON_COUNTDOWN_TO_TIME;
-      rounded_now = (now / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE; 
     }
-    diff = target - rounded_now;
+    diff = target - now;
   } else {
     // Count down to
     pre_text = NULL;
     post_text = " ago";
-    time_t rounded_now;
     if (config->countdown_to == 'D') {
       countdown_icon = ICON_COUNTDOWN_FROM_DATE;
-      rounded_now = (now / SECONDS_PER_DAY) * SECONDS_PER_DAY; 
     } else {
       countdown_icon = ICON_COUNTDOWN_FROM_TIME;
-      rounded_now = (now / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE; 
     } 
-    diff = rounded_now - target;
+    diff = now - target;
   }
   
-  // Determine count and unit
-  int count;
-  char* unit;
-  char count_text[6];
-  if (diff == 0) {
-    pre_text = NULL;
-    unit = NULL;
-    post_text = NULL;
-    if (config->countdown_to == 'D') {
-      strncpy(count_text, "Today", sizeof(count_text));
+  char *middle_texts[] = { config->countdown_label }; 
+  char **bottom_texts;
+  int bottom_text_count;
+  if (diff == 0 || (config->countdown_to == 'D' && diff == SECONDS_PER_DAY)) {
+    // Display one word
+    char* normal_text;
+    char* accent_text;
+    
+    if (diff == 0) {
+      normal_text = NULL;
+      if (config->countdown_to == 'D') {
+        accent_text = "Today";
+      } else {
+        accent_text = "Now";
+      }
     } else {
-      strncpy(count_text, "Now", sizeof(count_text));
+      accent_text = NULL;
+      if (config->countdown_target > now) {
+        normal_text = "Tomorrow";
+      } else {
+        normal_text = "Yesterday";
+      }
     }
+    
+    // Draw
+    char *bottom_texts[] = { normal_text, accent_text }; 
+    draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
+  } else if (config->countdown_display == 'F') {
+    // Display full detail
+    char year_count[3], week_count[3], day_count[3], hour_count[3], minute_count[3];
+    char *year_label, *week_label, *day_label, *hour_label, *minute_label;
+    
+    if (diff >= 365 * SECONDS_PER_DAY) {
+      snprintf(year_count, sizeof(year_count), "%d", diff / (365 * SECONDS_PER_DAY));
+      year_label = "y";
+      diff %= 365 * SECONDS_PER_DAY;
+    } else {
+      year_count[0] = 0;
+      year_label = NULL;
+    }
+    if (diff >= 7 * SECONDS_PER_DAY) {
+      snprintf(week_count, sizeof(week_count), "%d", diff / (7 * SECONDS_PER_DAY));
+      week_label = "w";
+      diff %= 7 * SECONDS_PER_DAY;
+    } else {
+      week_count[0] = 0;
+      week_label = NULL;
+    }
+    if (diff >= SECONDS_PER_DAY) {
+      snprintf(day_count, sizeof(day_count), "%d", diff / SECONDS_PER_DAY);
+      day_label = "d";
+      diff %= SECONDS_PER_DAY;
+    } else {
+      day_count[0] = 0;
+      day_label = NULL;
+    }
+    if (diff >= SECONDS_PER_HOUR) {
+      snprintf(hour_count, sizeof(hour_count), "%d", diff / SECONDS_PER_HOUR);
+      hour_label = "h";
+      diff %= SECONDS_PER_HOUR;
+    } else {
+      hour_count[0] = 0;
+      hour_label = NULL;
+    }
+    if (diff >= SECONDS_PER_MINUTE) {
+      snprintf(minute_count, sizeof(minute_count), "%d", diff / SECONDS_PER_MINUTE);
+      minute_label = "m";
+    } else {
+      minute_count[0] = 0;
+      minute_label = NULL;
+    }
+    
+    // Draw
+    char *bottom_texts[] = { pre_text, NULL, year_count, year_label, week_count, week_label, day_count, day_label, hour_count, hour_label, minute_count, minute_label, post_text }; 
+    draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   } else {
+    // Display incremental detail
+    int count;
+    char* unit;
+    char count_text[6];
     if (diff > 3 * 365 * SECONDS_PER_DAY) {
       count = diff / (365 * SECONDS_PER_DAY);
       unit = " years";
@@ -348,20 +405,9 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     } else if (diff > 3 * 7 * SECONDS_PER_DAY) {
       count = diff / (7 * SECONDS_PER_DAY);
       unit = " weeks";
-    } else if (diff > 3 * SECONDS_PER_DAY) {
+    } else if (diff > 3 * SECONDS_PER_DAY || config->countdown_to == 'D') {
       count = diff / SECONDS_PER_DAY;
       unit = " days";
-    } else if (config->countdown_to == 'D') {
-      if (diff > SECONDS_PER_DAY) {
-        count = diff / SECONDS_PER_DAY;
-        unit = " days";      
-      } else if (config->countdown_target > now && (config->countdown_target - now) < 12 * SECONDS_PER_HOUR) {
-        count = 1;
-        unit = " night";      
-      } else {
-        count = 1;
-        unit = " day";      
-      }
     } else if (diff > 3 * SECONDS_PER_HOUR) {
       count = diff / SECONDS_PER_HOUR;
       unit = " hours";
@@ -371,16 +417,13 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     } else {
       count = 1;
       unit = " minute";   
-    }
-    
-    snprintf(count_text, sizeof(count_text), "%d", count);
+    }    
+    snprintf(count_text, sizeof(count_text), "%d", count);    
+  
+    // Draw
+    char *bottom_texts[] = { pre_text, count_text, unit, NULL, post_text };
+    draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   }
-  
-  char *middle_texts[] = { config->countdown_label }; 
-  char *bottom_texts[] = { pre_text, count_text, unit, NULL, post_text }; 
-  
-  // Draw
-  draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
 }
 
 void error_update_proc(Layer *layer, GContext *ctx) { 
@@ -817,6 +860,8 @@ void switcher_update_proc(Layer* layer, GContext* ctx) {
     // Draw circle
     graphics_context_set_fill_color(ctx, config->color_secondary);
     graphics_fill_circle(ctx, icon_point, 10);
+    graphics_context_set_stroke_color(ctx, config->color_background);
+    graphics_draw_circle(ctx, icon_point, 11);
     
     // Draw icon
     char* icon = view.alt_layer_icons[i];      

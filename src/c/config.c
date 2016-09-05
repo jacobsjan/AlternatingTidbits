@@ -96,12 +96,14 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   #endif 
   
   // Countdown
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownLabel);
+  if(tuple && (cfgChanged = true)) strncpy(config->countdown_label, tuple->value->cstring, sizeof(config->countdown_label));  
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTo);
   if(tuple && (cfgChanged = true)) config->countdown_to = tuple->value->cstring[0]; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTarget);
   if(tuple && (cfgChanged = true)) config->countdown_target = tuple->value->int32; 
-  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownLabel);
-  if(tuple && (cfgChanged = true)) strncpy(config->countdown_label, tuple->value->cstring, sizeof(config->countdown_label));  
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownDisplay);
+  if(tuple && (cfgChanged = true)) config->countdown_display = tuple->value->cstring[0]; 
   
   // Health
   if(tuple && (cfgChanged = true)) config->health_number_format = tuple->value->cstring[0]; 
