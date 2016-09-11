@@ -100,8 +100,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) strncpy(config->countdown_label, tuple->value->cstring, sizeof(config->countdown_label));  
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTo);
   if(tuple && (cfgChanged = true)) config->countdown_to = tuple->value->cstring[0]; 
-  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTarget);
-  if(tuple && (cfgChanged = true)) config->countdown_target = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTime);
+  if(tuple && (cfgChanged = true)) config->countdown_time = tuple->value->int32; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownDate);
+  if(tuple && (cfgChanged = true)) config->countdown_date = tuple->value->int32; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownDisplay);
   if(tuple && (cfgChanged = true)) config->countdown_display = tuple->value->cstring[0]; 
   

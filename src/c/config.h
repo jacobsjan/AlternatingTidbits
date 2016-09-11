@@ -46,7 +46,8 @@ struct Config {
   
   char countdown_label[30];
   char countdown_to;
-  time_t countdown_target;
+  int countdown_time;
+  int countdown_date;
   char countdown_display;
   
   char health_number_format;

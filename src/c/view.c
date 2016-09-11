@@ -284,15 +284,90 @@ static void compass_update_proc(Layer *layer, GContext *ctx) {
 }
 #endif
 
+int days_per_month(int month, int year) {
+  if (month == 1) {
+    if (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)) {
+      return 29;
+    } else {
+      return 28;
+    }
+  } else {
+    static const int months[] = { 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    return months[month];
+  }
+}
+
+static int isleap (unsigned yr) {
+  return yr % 400 == 0 || (yr % 4 == 0 && yr % 100 != 0);
+}
+
+static unsigned months_to_days (unsigned month) {
+  return (month * 3057 - 3007) / 100;
+}
+
+static unsigned years_to_days (unsigned yr) {
+  return yr * 365L + yr / 4 - yr / 100 + yr / 400;
+}
+
+static long ymd_to_scalar (unsigned yr, unsigned mo, unsigned day) {
+  long scalar;
+
+  scalar = day + months_to_days(mo);
+  if (mo > 2) /* adjust if past February */
+    scalar -= isleap(yr) ? 1 : 2;
+  yr--;
+  scalar += years_to_days(yr);
+  return scalar;
+}
+
+time_t p_mktime (struct tm *timeptr) {
+  time_t tt;
+
+  if ((timeptr->tm_year < 70) || (timeptr->tm_year > 120)) {
+    tt = (time_t)-1;
+  } else {
+    tt = ymd_to_scalar(timeptr->tm_year + 1900,
+                       timeptr->tm_mon + 1,
+                       timeptr->tm_mday)
+      - ymd_to_scalar(1970, 1, 1);
+    tt = tt * 24 + timeptr->tm_hour;
+    tt = tt * 60 + timeptr->tm_min;
+    tt = tt * 60 + timeptr->tm_sec;
+  }
+  return tt;
+}
+
 static void countdown_update_proc(Layer *layer, GContext *ctx) {
   char* countdown_icon;
   char* pre_text;
   char* post_text;
-  int diff;
   
-  // Choose icon and calculate diff
+  // Convert target and now to tm and time_t formats
   time_t now = config->countdown_to == 'D' ? time_start_of_today() : (time(NULL) / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE;
-  time_t target = config->countdown_target;
+  struct tm now_tm = *localtime(&now);
+  struct tm target_tm;
+  target_tm.tm_year = config->countdown_date / (100 * 100) - 1900;
+  target_tm.tm_mon = (config->countdown_date % (100 * 100)) / 100 - 1;
+  target_tm.tm_mday = config->countdown_date % 100;
+  target_tm.tm_hour = config->countdown_time / 100;
+  target_tm.tm_min = config->countdown_time % 100;
+  target_tm.tm_sec = 0;
+  target_tm.tm_isdst = 0;
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Year 1: %d", target_tm.tm_year);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Month 1: %d", target_tm.tm_mon);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Day 1: %d", target_tm.tm_mday);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Hour 1: %d", target_tm.tm_hour);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Minute 1: %d", target_tm.tm_min);
+  time_t target = p_mktime(&target_tm);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Year 2: %d", target_tm.tm_year);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Month 2: %d", target_tm.tm_mon);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Day 2: %d", target_tm.tm_mday);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Hour 2: %d", target_tm.tm_hour);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Minute 2: %d", target_tm.tm_min);
+  
+  // Choose icon, pre- and post-text, max and min
+  time_t max, min;
+  struct tm max_tm, min_tm;
   if (config->countdown_to == 'E') target += time_start_of_today();
   if (target > now) {
     // Count down to
@@ -303,19 +378,55 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     } else  {
       countdown_icon = ICON_COUNTDOWN_TO_TIME;
     }
-    diff = target - now;
+    max = target;
+    min = now;
+    max_tm = target_tm;
+    min_tm = now_tm;
   } else {
     // Count down to
     pre_text = NULL;
-    post_text = " ago";
+    post_text = "ago";
     if (config->countdown_to == 'D') {
       countdown_icon = ICON_COUNTDOWN_FROM_DATE;
     } else {
       countdown_icon = ICON_COUNTDOWN_FROM_TIME;
     } 
-    diff = now - target;
+    max = now;
+    min = target;
+    max_tm = now_tm;
+    min_tm = target_tm;
   }
   
+  // Calculate differences
+  int diff = max - min;
+  
+  char max_test[20];
+  char min_test[20];
+  strftime(max_test, sizeof(max_test), "%c", &max_tm);
+  strftime(min_test, sizeof(min_test), "%c", &min_tm);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Target: %d", (int)target);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Now: %d", (int)now);  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Max: %s", max_test);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Min: %s", min_test);
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Target date: %d", config->countdown_date);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Target time: %d", config->countdown_time);
+  
+  int received = min_tm.tm_min > max_tm.tm_min ? 60 : 0;
+  int min_diff = max_tm.tm_min + received - min_tm.tm_min;
+  int borrow = received > 0 ? 1 : 0;
+  received = min_tm.tm_hour + borrow > max_tm.tm_hour ? 24 : 0;
+  int hour_diff = max_tm.tm_hour + received - min_tm.tm_hour - borrow;
+  borrow = received > 0 ? 1 : 0;
+  received = min_tm.tm_mday + borrow > max_tm.tm_mday ? days_per_month((min_tm.tm_mon - 1 + 12) % 12, min_tm.tm_year - (min_tm.tm_mon == 0 ? 1 : 0)) : 0;
+  int day_diff = max_tm.tm_mday + received - min_tm.tm_mday - borrow;
+  borrow = received > 0 ? 1 : 0;
+  received = min_tm.tm_mon + borrow > max_tm.tm_mon ? 12 : 0;
+  int month_diff = max_tm.tm_mon + received - min_tm.tm_mon - borrow;
+  borrow = received > 0 ? 1 : 0;
+  int year_diff = max_tm.tm_year - min_tm.tm_year - borrow;
+  
+  // Display results
   char *middle_texts[] = { config->countdown_label }; 
   char **bottom_texts;
   int bottom_text_count;
@@ -333,7 +444,7 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
       }
     } else {
       accent_text = NULL;
-      if (config->countdown_target > now) {
+      if (target > now) {
         normal_text = "Tomorrow";
       } else {
         normal_text = "Yesterday";
@@ -345,51 +456,32 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   } else if (config->countdown_display == 'F') {
     // Display full detail
-    char year_count[3], week_count[3], day_count[3], hour_count[3], minute_count[3];
-    char *year_label, *week_label, *day_label, *hour_label, *minute_label;
+    char year_count[3] = { 0 }, month_count[3] = { 0 }, day_count[3] = { 0 }, hour_count[3] = { 0 }, minute_count[3] = { 0 };
+    char *year_label = NULL, *month_label = NULL, *day_label = NULL, *hour_label = NULL, *minute_label = NULL;
     
-    if (diff >= 365 * SECONDS_PER_DAY) {
-      snprintf(year_count, sizeof(year_count), "%d", diff / (365 * SECONDS_PER_DAY));
-      year_label = "y";
-      diff %= 365 * SECONDS_PER_DAY;
-    } else {
-      year_count[0] = 0;
-      year_label = NULL;
+    if (year_diff > 0) {
+      snprintf(year_count, sizeof(year_count), "%d", year_diff);
+      year_label = "y ";
+    } 
+    if (month_diff > 0) {
+      snprintf(month_count, sizeof(month_count), "%d", month_diff);
+      month_label = "m ";
     }
-    if (diff >= 7 * SECONDS_PER_DAY) {
-      snprintf(week_count, sizeof(week_count), "%d", diff / (7 * SECONDS_PER_DAY));
-      week_label = "w";
-      diff %= 7 * SECONDS_PER_DAY;
-    } else {
-      week_count[0] = 0;
-      week_label = NULL;
+    if (day_diff > 0) {
+      snprintf(day_count, sizeof(day_count), "%d", day_diff);
+      day_label = "d ";
     }
-    if (diff >= SECONDS_PER_DAY) {
-      snprintf(day_count, sizeof(day_count), "%d", diff / SECONDS_PER_DAY);
-      day_label = "d";
-      diff %= SECONDS_PER_DAY;
-    } else {
-      day_count[0] = 0;
-      day_label = NULL;
+    if (hour_diff > 0) {
+      snprintf(hour_count, sizeof(hour_count), "%d", hour_diff);
+      hour_label = "h ";
     }
-    if (diff >= SECONDS_PER_HOUR) {
-      snprintf(hour_count, sizeof(hour_count), "%d", diff / SECONDS_PER_HOUR);
-      hour_label = "h";
-      diff %= SECONDS_PER_HOUR;
-    } else {
-      hour_count[0] = 0;
-      hour_label = NULL;
-    }
-    if (diff >= SECONDS_PER_MINUTE) {
-      snprintf(minute_count, sizeof(minute_count), "%d", diff / SECONDS_PER_MINUTE);
-      minute_label = "m";
-    } else {
-      minute_count[0] = 0;
-      minute_label = NULL;
+    if (min_diff > 0) {
+      snprintf(minute_count, sizeof(minute_count), "%d", min_diff);
+      minute_label = "m ";
     }
     
     // Draw
-    char *bottom_texts[] = { pre_text, NULL, year_count, year_label, week_count, week_label, day_count, day_label, hour_count, hour_label, minute_count, minute_label, post_text }; 
+    char *bottom_texts[] = { pre_text, NULL, year_count, year_label, month_count, month_label, day_count, day_label, hour_count, hour_label, minute_count, minute_label, post_text }; 
     draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   } else {
     // Display incremental detail
@@ -398,25 +490,25 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     char count_text[6];
     if (diff > 3 * 365 * SECONDS_PER_DAY) {
       count = diff / (365 * SECONDS_PER_DAY);
-      unit = " years";
+      unit = " years ";
     } else if (diff > 3 * 30 * SECONDS_PER_DAY) {
       count = diff / (30 * SECONDS_PER_DAY);
-      unit = " months";
+      unit = " months ";
     } else if (diff > 3 * 7 * SECONDS_PER_DAY) {
       count = diff / (7 * SECONDS_PER_DAY);
-      unit = " weeks";
+      unit = " weeks ";
     } else if (diff > 3 * SECONDS_PER_DAY || config->countdown_to == 'D') {
       count = diff / SECONDS_PER_DAY;
-      unit = " days";
+      unit = " days ";
     } else if (diff > 3 * SECONDS_PER_HOUR) {
       count = diff / SECONDS_PER_HOUR;
-      unit = " hours";
+      unit = " hours ";
     } else if (diff > SECONDS_PER_MINUTE) {
       count = diff / SECONDS_PER_MINUTE;
-      unit = " minutes";
+      unit = " minutes ";
     } else {
       count = 1;
-      unit = " minute";   
+      unit = " minute ";   
     }    
     snprintf(count_text, sizeof(count_text), "%d", count);    
   
