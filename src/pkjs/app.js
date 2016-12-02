@@ -211,8 +211,8 @@ function fetchAltitude() {
         });    
     }, { 
       enableHighAccuracy: true,
-      maximumAge: 20000,
-      timeout: 30000
+      maximumAge: 0,
+      timeout: 59000
     } );
 }
 

@@ -89,9 +89,9 @@
         "resources": {
             "media": [
                 {
-                    "characterRegex": ".",
-                    "file": "fonts/icons_16",
-                    "name": "FONT_ICONS_16",
+                    "characterRegex": "[0-9:]",
+                    "file": "fonts/sparkler_54",
+                    "name": "FONT_SPARKLER_54",
                     "targetPlatforms": null,
                     "type": "font"
                 },
@@ -102,15 +102,15 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[0-9:]",
-                    "file": "fonts/sparkler_54",
-                    "name": "FONT_SPARKLER_54",
+                    "file": "fonts/icons_30",
+                    "name": "FONT_ICONS_30",
                     "targetPlatforms": null,
                     "type": "font"
                 },
                 {
-                    "file": "fonts/icons_30",
-                    "name": "FONT_ICONS_30",
+                    "characterRegex": ".",
+                    "file": "fonts/icons_16",
+                    "name": "FONT_ICONS_16",
                     "targetPlatforms": null,
                     "type": "font"
                 }

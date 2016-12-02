@@ -284,9 +284,13 @@ static void compass_update_proc(Layer *layer, GContext *ctx) {
 }
 #endif
 
+static bool is_leap (int yr) {
+  return yr % 400 == 0 || (yr % 4 == 0 && yr % 100 != 0);
+}
+
 int days_per_month(int month, int year) {
   if (month == 1) {
-    if (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)) {
+    if (is_leap(year)) {
       return 29;
     } else {
       return 28;
@@ -297,79 +301,61 @@ int days_per_month(int month, int year) {
   }
 }
 
-static int isleap (unsigned yr) {
-  return yr % 400 == 0 || (yr % 4 == 0 && yr % 100 != 0);
-}
-
-static unsigned months_to_days (unsigned month) {
+static int months_to_days (int month) {
   return (month * 3057 - 3007) / 100;
 }
 
-static unsigned years_to_days (unsigned yr) {
-  return yr * 365L + yr / 4 - yr / 100 + yr / 400;
+static int years_to_days (int yr) {
+  return yr * 365 + yr / 4 - yr / 100 + yr / 400;
 }
 
-static long ymd_to_scalar (unsigned yr, unsigned mo, unsigned day) {
+static long ymd_to_days (int yr, int mo, int day) {
   long scalar;
 
   scalar = day + months_to_days(mo);
   if (mo > 2) /* adjust if past February */
-    scalar -= isleap(yr) ? 1 : 2;
+    scalar -= is_leap(yr) ? 1 : 2;
   yr--;
   scalar += years_to_days(yr);
   return scalar;
 }
 
-time_t p_mktime (struct tm *timeptr) {
-  time_t tt;
-
-  if ((timeptr->tm_year < 70) || (timeptr->tm_year > 120)) {
-    tt = (time_t)-1;
-  } else {
-    tt = ymd_to_scalar(timeptr->tm_year + 1900,
-                       timeptr->tm_mon + 1,
-                       timeptr->tm_mday)
-      - ymd_to_scalar(1970, 1, 1);
-    tt = tt * 24 + timeptr->tm_hour;
-    tt = tt * 60 + timeptr->tm_min;
-    tt = tt * 60 + timeptr->tm_sec;
-  }
-  return tt;
-}
-
 static void countdown_update_proc(Layer *layer, GContext *ctx) {
-  char* countdown_icon;
-  char* pre_text;
-  char* post_text;
+  // As iOS javascript seems to disagree with Pebble on DST for further away dates
+  // and mktime seems to completely fail on the Pebble we're doing all countdown
+  // calculations in local time.
   
-  // Convert target and now to tm and time_t formats
+  // Convert target and now to tm formats
   time_t now = config->countdown_to == 'D' ? time_start_of_today() : (time(NULL) / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE;
   struct tm now_tm = *localtime(&now);
   struct tm target_tm;
-  target_tm.tm_year = config->countdown_date / (100 * 100) - 1900;
-  target_tm.tm_mon = (config->countdown_date % (100 * 100)) / 100 - 1;
-  target_tm.tm_mday = config->countdown_date % 100;
+  if (config->countdown_to != 'E') {
+    target_tm.tm_year = config->countdown_date / 10000 - 1900;
+    target_tm.tm_mon = (config->countdown_date % 10000) / 100 - 1;
+    target_tm.tm_mday = config->countdown_date % 100;
+  } else {
+    target_tm.tm_year = now_tm.tm_year;
+    target_tm.tm_mon = now_tm.tm_mon;
+    target_tm.tm_mday = now_tm.tm_mday;
+  }
   target_tm.tm_hour = config->countdown_time / 100;
   target_tm.tm_min = config->countdown_time % 100;
   target_tm.tm_sec = 0;
-  target_tm.tm_isdst = 0;
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Year 1: %d", target_tm.tm_year);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Month 1: %d", target_tm.tm_mon);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Day 1: %d", target_tm.tm_mday);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Hour 1: %d", target_tm.tm_hour);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Minute 1: %d", target_tm.tm_min);
-  time_t target = p_mktime(&target_tm);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Year 2: %d", target_tm.tm_year);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Month 2: %d", target_tm.tm_mon);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Day 2: %d", target_tm.tm_mday);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Hour 2: %d", target_tm.tm_hour);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Minute 2: %d", target_tm.tm_min);
   
-  // Choose icon, pre- and post-text, max and min
-  time_t max, min;
+  // Convert target and now to comparable formats
+  long target_comp = config->countdown_date * 10000L + config->countdown_time;
+  long now_comp = now_tm.tm_year + 1900;
+  now_comp = now_comp * 100L + now_tm.tm_mon + 1;
+  now_comp = now_comp * 100L + now_tm.tm_mday;
+  now_comp = now_comp * 100L + now_tm.tm_hour;
+  now_comp = now_comp * 100L + now_tm.tm_min;
+  
+  // Choose icon, pre- and post-text, max_tm and min_tm
+  char *countdown_icon;
+  char *pre_text;
+  char *post_text;
   struct tm max_tm, min_tm;
-  if (config->countdown_to == 'E') target += time_start_of_today();
-  if (target > now) {
+  if (target_comp > now_comp) {
     // Count down to
     pre_text = "in ";
     post_text = NULL;    
@@ -378,8 +364,6 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     } else  {
       countdown_icon = ICON_COUNTDOWN_TO_TIME;
     }
-    max = target;
-    min = now;
     max_tm = target_tm;
     min_tm = now_tm;
   } else {
@@ -391,34 +375,18 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     } else {
       countdown_icon = ICON_COUNTDOWN_FROM_TIME;
     } 
-    max = now;
-    min = target;
     max_tm = now_tm;
     min_tm = target_tm;
   }
   
-  // Calculate differences
-  int diff = max - min;
-  
-  char max_test[20];
-  char min_test[20];
-  strftime(max_test, sizeof(max_test), "%c", &max_tm);
-  strftime(min_test, sizeof(min_test), "%c", &min_tm);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Target: %d", (int)target);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Now: %d", (int)now);  
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Max: %s", max_test);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Min: %s", min_test);
-  
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Target date: %d", config->countdown_date);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Target time: %d", config->countdown_time);
-  
+  // Calculate differences in years, months, days, hours and minutes
   int received = min_tm.tm_min > max_tm.tm_min ? 60 : 0;
   int min_diff = max_tm.tm_min + received - min_tm.tm_min;
   int borrow = received > 0 ? 1 : 0;
   received = min_tm.tm_hour + borrow > max_tm.tm_hour ? 24 : 0;
   int hour_diff = max_tm.tm_hour + received - min_tm.tm_hour - borrow;
   borrow = received > 0 ? 1 : 0;
-  received = min_tm.tm_mday + borrow > max_tm.tm_mday ? days_per_month((min_tm.tm_mon - 1 + 12) % 12, min_tm.tm_year - (min_tm.tm_mon == 0 ? 1 : 0)) : 0;
+  received = min_tm.tm_mday + borrow > max_tm.tm_mday ? days_per_month((max_tm.tm_mon - 1 + 12) % 12, max_tm.tm_year - (max_tm.tm_mon == 0 ? 1 : 0)) : 0;
   int day_diff = max_tm.tm_mday + received - min_tm.tm_mday - borrow;
   borrow = received > 0 ? 1 : 0;
   received = min_tm.tm_mon + borrow > max_tm.tm_mon ? 12 : 0;
@@ -426,10 +394,15 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   borrow = received > 0 ? 1 : 0;
   int year_diff = max_tm.tm_year - min_tm.tm_year - borrow;
   
+  // Calculate total difference in seconds
+  long diff = ymd_to_days(max_tm.tm_year + 1900, max_tm.tm_mon + 1, max_tm.tm_mday) - ymd_to_days(min_tm.tm_year + 1900, min_tm.tm_mon + 1, min_tm.tm_mday);
+  if (min_tm.tm_hour * 100 + min_tm.tm_min > max_tm.tm_hour * 100 + max_tm.tm_min) diff -= 1;
+  diff = diff * 24 + hour_diff;
+  diff = diff * 60 + min_diff;
+  diff = diff * 60;
+  
   // Display results
   char *middle_texts[] = { config->countdown_label }; 
-  char **bottom_texts;
-  int bottom_text_count;
   if (diff == 0 || (config->countdown_to == 'D' && diff == SECONDS_PER_DAY)) {
     // Display one word
     char* normal_text;
@@ -444,7 +417,7 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
       }
     } else {
       accent_text = NULL;
-      if (target > now) {
+      if (target_comp > now_comp) {
         normal_text = "Tomorrow";
       } else {
         normal_text = "Yesterday";
@@ -488,11 +461,11 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     int count;
     char* unit;
     char count_text[6];
-    if (diff > 3 * 365 * SECONDS_PER_DAY) {
-      count = diff / (365 * SECONDS_PER_DAY);
+    if (year_diff > 3 ) {
+      count = year_diff;
       unit = " years ";
-    } else if (diff > 3 * 30 * SECONDS_PER_DAY) {
-      count = diff / (30 * SECONDS_PER_DAY);
+    } else if (month_diff > 3) {
+      count = month_diff;
       unit = " months ";
     } else if (diff > 3 * 7 * SECONDS_PER_DAY) {
       count = diff / (7 * SECONDS_PER_DAY);
@@ -1210,9 +1183,26 @@ void moonphase_changed() {
   } 
 }
 
+static void switcher_animation_update(Animation *animation, const AnimationProgress progress) {
+  view.switcher_animation_progress = progress;
+  if (view.layers.switcher) layer_mark_dirty(view.layers.switcher);
+}
+
+static void switcher_animation_teardown(Animation *animation) {
+  if (view.switcher_animation)
+  { 
+    animation_unschedule(view.switcher_animation);
+    animation_destroy(view.switcher_animation);
+    view.switcher_animation = NULL;
+  }
+}
+
 void switcher_timeout_callback(void *data) {
+  // Stop animations
+  switcher_animation_teardown(NULL);
+  
   // Destroy the layer
-  if (view.layers.switcher != NULL) {
+  if (view.layers.switcher) {
     layer_remove_from_parent(view.layers.switcher);
     layer_destroy(view.layers.switcher);    
     view.layers.switcher = NULL;
@@ -1221,7 +1211,7 @@ void switcher_timeout_callback(void *data) {
   // Clear the suspension
   view.suspension_reason &= ~SUSPENSION_SWITCHER;
     
-  // Unubscribe from tap events
+  // Unubscribe from tap events 
   model_remove_update_req(UPDATE_TAPS);
   
   // Reset timeout
@@ -1267,16 +1257,6 @@ void flicked() {
     compass_enable_changed();
     #endif
   } 
-}
-
-static void switcher_animation_update(Animation *animation, const AnimationProgress progress) {
-  view.switcher_animation_progress = progress;
-  if (view.layers.switcher) layer_mark_dirty(view.layers.switcher);
-}
-
-static void switcher_animation_teardown(Animation *animation) {
-  animation_destroy(animation);
-  view.switcher_animation = NULL;
 }
 
 void tapped() {
