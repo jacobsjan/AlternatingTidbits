@@ -70,30 +70,31 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
   dict[keys.cfgTimeZoneOffset] = timezoneOffset;
   
-  // Convert countdown time/date to posix format
+  // Convert countdown time/date to integers, avoiding posix format due to DST issues over longer periods of time
   var timeElems = dict[keys.cfgCountdownTime].split(':');
   var dateElems = dict[keys.cfgCountdownDate].split('-');
   if (dict[keys.cfgCountdownTo] == 'D') {
     if (dateElems.length == 3) {
-      dict[keys.cfgCountdownTarget] = new Date(dateElems[0], parseInt(dateElems[1]) - 1, dateElems[2]).getTime() / 1000; 
+      dict[keys.cfgCountdownTime] = 0; 
+      dict[keys.cfgCountdownDate] = parseInt(dateElems[0]) * 100 * 100 + parseInt(dateElems[1]) * 100 + parseInt(dateElems[2]); 
     } else {
       dict[keys.cfgEnableCountdown] = 0;
     }
   } else if (dict[keys.cfgCountdownTo] == 'T') {
     if (dateElems.length == 3 && timeElems.length == 2) {
-      dict[keys.cfgCountdownTarget] = new Date(dateElems[0], parseInt(dateElems[1]) - 1, dateElems[2], timeElems[0], timeElems[1], 0, 0).getTime() / 1000; 
+      dict[keys.cfgCountdownTime] = parseInt(timeElems[0]) * 100 + parseInt(timeElems[1]); 
+      dict[keys.cfgCountdownDate] = parseInt(dateElems[0]) * 100 * 100 + parseInt(dateElems[1]) * 100 + parseInt(dateElems[2]); 
     } else {
       dict[keys.cfgEnableCountdown] = 0;
     }
   } else {
     if (timeElems.length == 2) {
-      dict[keys.cfgCountdownTarget] = parseInt(timeElems[0]) * 60 * 60 + parseInt(timeElems[1]) * 60;
+      dict[keys.cfgCountdownTime] = parseInt(timeElems[0]) * 100 + parseInt(timeElems[1]); 
+      dict[keys.cfgCountdownDate] = 0;
     } else {
       dict[keys.cfgEnableCountdown] = 0;
     }
   }
-  dict[keys.cfgCountdownTime] = '';
-  dict[keys.cfgCountdownDate] = '';
   
   // Convert health indicators to int
   dict[keys.cfgHealthNormalLine1] = parseInt(dict[keys.cfgHealthNormalLine1]);
@@ -210,8 +211,8 @@ function fetchAltitude() {
         });    
     }, { 
       enableHighAccuracy: true,
-      maximumAge: 20000,
-      timeout: 30000
+      maximumAge: 0,
+      timeout: 59000
     } );
 }
 

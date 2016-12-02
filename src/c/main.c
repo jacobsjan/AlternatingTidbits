@@ -11,6 +11,7 @@
 bool js_ready = false;
 int weather_fetch_countdown = 0;
 AppTimer* vibration_overload_timer = NULL;
+AppTimer* acel_unsubscribe_timer = NULL;
 bool tapping = false;
 
 void altitude_req_changed(bool required);
@@ -430,7 +431,39 @@ void vibration_overload_timeout_callback(void *data) {
   vibration_overload_timer = NULL;
 }
 
+static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
+  // Check whether not in vibration overload
+  if (model->error != ERROR_VIBRATION_OVERLOAD) { 
+    // Check whether not vibrating
+    //AccelData accel_data;
+    //accel_service_peek(&accel_data);
+    //if (!accel_data.did_vibrate) {
+      // Flick detected
+      model_signal_flick();
+    //}
+  } else {
+    // Prolong vibration overload
+    if (vibration_overload_timer) {
+      app_timer_reschedule(vibration_overload_timer, 15000);
+    }
+    else {
+      vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
+    }
+  }
+}
+
+void flick_req_changed(bool required) {
+  if (required) {    
+    accel_tap_service_subscribe(accel_flick_handler);
+  } else {
+    accel_tap_service_unsubscribe();
+  }
+}
+
 void accel_handler(AccelData *data, uint32_t num_samples) {
+  // Check whether tap events are still required
+  //if (!(model->update_req & UPDATE_TAPS)) return;
+  
   // Detect minor taps
   bool also_calm = false;
   bool tapped = false;
@@ -455,12 +488,22 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
     model_set_error(ERROR_VIBRATION_OVERLOAD);
     
     // Timeout error after 15sec
-    if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
-    vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
+    if (vibration_overload_timer) {
+      app_timer_reschedule(vibration_overload_timer, 15000);
+    }
+    else {
+      vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
+    }
   } else if (tapped) {
     // Signal tap detected
     model_signal_tap();
   }
+}
+
+void acel_unsubscribe_callback(void *data) {  
+  accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
+  accel_data_service_unsubscribe(); 
+  acel_unsubscribe_timer = NULL;
 }
 
 void tap_req_changed(bool required) {
@@ -470,38 +513,12 @@ void tap_req_changed(bool required) {
     accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
     tapping = false;
   } else {
-    // Unsubscribe from accelerator data
-    accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
-    accel_data_service_unsubscribe();
-  }
-}
-
-static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
-  // Check whether not in vibration overload
-  if (model->error != ERROR_VIBRATION_OVERLOAD) { 
-    // Check whether not vibrating
-    AccelData accel_data;
-    accel_service_peek(&accel_data);
-    if (!accel_data.did_vibrate) {
-      // Flick detected
-      model_signal_flick();
+    // Unsubscribe from accelerator data via timer. 
+    // Unsubscribing here, often in an accel event,
+    // causes the app to crash.
+    if (!acel_unsubscribe_timer){
+      acel_unsubscribe_timer = app_timer_register(10, acel_unsubscribe_callback, NULL); 
     }
-  } else {
-    // Prolong vibration overload
-    if (vibration_overload_timer) {
-      app_timer_reschedule(vibration_overload_timer, 15000);
-    }
-    else {
-      vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
-    }
-  }
-}
-
-void flick_req_changed(bool required) {
-  if (required) {    
-    accel_tap_service_subscribe(accel_flick_handler);
-  } else {
-    accel_tap_service_unsubscribe();
   }
 }
 
