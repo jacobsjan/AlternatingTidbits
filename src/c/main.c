@@ -39,12 +39,16 @@ int altitude_descend = 0;
 #endif
 
 static inline bool is_asleep() {
-  bool sleeping = false;
-  #if defined(PBL_HEALTH) 
-  HealthActivityMask activities = health_service_peek_current_activities();
-  sleeping = activities & (HealthActivitySleep | HealthActivityRestfulSleep);
-  #endif
-  return sleeping;
+  if (quiet_time_is_active()) {
+    return true;
+  } else {
+    bool sleeping = false;
+    #if defined(PBL_HEALTH) 
+    HealthActivityMask activities = health_service_peek_current_activities();
+    sleeping = activities & (HealthActivitySleep | HealthActivityRestfulSleep);
+    #endif
+    return sleeping;
+  }
 }
 
 static bool fetch_weather() {
@@ -184,15 +188,23 @@ void update_health() {
     if (activity_buffer[last_index].totalStepCount < activity_buffer[first_index].totalStepCount) {
       // Invert values in the buffer below zero, the last minute before midnight will seem like a pauze as no data of it is available
       int maxValuesIndex = (last_index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+      struct ActivityStamp maxValues = activity_buffer[maxValuesIndex];
       for (int i = 0; i < ACTIVITY_MONITOR_WINDOW; ++i) {
         if (i != last_index) {
-          activity_buffer[i].totalCalories -= activity_buffer[maxValuesIndex].totalCalories;
-          activity_buffer[i].totalDistance -= activity_buffer[maxValuesIndex].totalDistance;
-          activity_buffer[i].totalStepCount -= activity_buffer[maxValuesIndex].totalStepCount;     
-          activity_buffer[i].totalClimb -= activity_buffer[maxValuesIndex].totalClimb;
-          activity_buffer[i].totalDescend -= activity_buffer[maxValuesIndex].totalDescend;       
+          activity_buffer[i].totalCalories -= maxValues.totalCalories;
+          activity_buffer[i].totalDistance -= maxValues.totalDistance;
+          activity_buffer[i].totalStepCount -= maxValues.totalStepCount;     
+          activity_buffer[i].totalClimb -= maxValues.totalClimb;
+          activity_buffer[i].totalDescend -= maxValues.totalDescend;       
         }
       }
+      
+      // Invert values in allready active activity
+      activity_start.totalCalories -= maxValues.totalCalories;
+      activity_start.totalDistance -= maxValues.totalDistance;
+      activity_start.totalStepCount -= maxValues.totalStepCount;     
+      activity_start.totalClimb -= maxValues.totalClimb;
+      activity_start.totalDescend -= maxValues.totalDescend;    
     }
     
     // Calculate average step pace
@@ -434,13 +446,8 @@ void vibration_overload_timeout_callback(void *data) {
 static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
   // Check whether not in vibration overload
   if (model->error != ERROR_VIBRATION_OVERLOAD) { 
-    // Check whether not vibrating
-    //AccelData accel_data;
-    //accel_service_peek(&accel_data);
-    //if (!accel_data.did_vibrate) {
-      // Flick detected
-      model_signal_flick();
-    //}
+    // Flick detected
+    model_signal_flick();
   } else {
     // Prolong vibration overload
     if (vibration_overload_timer) {
@@ -462,7 +469,7 @@ void flick_req_changed(bool required) {
 
 void accel_handler(AccelData *data, uint32_t num_samples) {
   // Check whether tap events are still required
-  //if (!(model->update_req & UPDATE_TAPS)) return;
+  if (!(model->update_req & UPDATE_TAPS)) APP_LOG(APP_LOG_LEVEL_WARNING, "Accel handling while no longer required"); //return;
   
   // Detect minor taps
   bool also_calm = false;
@@ -517,7 +524,7 @@ void tap_req_changed(bool required) {
     // Unsubscribing here, often in an accel event,
     // causes the app to crash.
     if (!acel_unsubscribe_timer){
-      acel_unsubscribe_timer = app_timer_register(10, acel_unsubscribe_callback, NULL); 
+      acel_unsubscribe_timer = app_timer_register(0, acel_unsubscribe_callback, NULL); 
     }
   }
 }

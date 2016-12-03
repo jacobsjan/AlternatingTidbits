@@ -103,7 +103,7 @@ module.exports = [
         "messageKey": "cfgVibrateHourly",
         "label": "Vibrate on the hour",
         "defaultValue": false,
-        "description": "Both vibrations are suspended during sleep.",
+        "description": "Both vibrations are suspended during quiet time and sleep.",
         "capabilities": ["HEALTH"]
       },
       {
@@ -111,6 +111,7 @@ module.exports = [
         "messageKey": "cfgVibrateHourly",
         "label": "Vibrate on the hour",
         "defaultValue": false,
+        "description": "Both vibrations are suspended during quiet time.",
         "capabilities": ["NOT_HEALTH"]
       }
     ]

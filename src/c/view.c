@@ -134,20 +134,20 @@ void draw_multi_centered(Layer *layer, GContext *ctx, char* icon, GColor icon_co
   int text_left = icon_left + icon_size.w;
   
   // Draw the icon
-  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(34, 30), icon_size.w, icon_size.h);
+  GRect draw_bounds = GRect(icon_left, bounds.origin.y + PBL_IF_ROUND_ELSE(34, 28), icon_size.w, icon_size.h);
   graphics_context_set_text_color(ctx, icon_color);
   graphics_draw_text(ctx, icon, view.fonts.icons, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
   
   // Draw the top text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 40, top_text_size.w, top_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(40, 34) - 40, top_text_size.w, top_text_size.h);
   draw_alternating_text(ctx, draw_bounds, top_text_count, top_texts);
   
   // Draw the middle text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24) - 20, middle_text_size.w, middle_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(40, 34) - 20, middle_text_size.w, middle_text_size.h);
   draw_alternating_text(ctx, draw_bounds, middle_text_count, middle_texts);
     
   // Draw the bottom text
-  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(12, 10) + PBL_IF_ROUND_ELSE(28, 24), bottom_text_size.w, bottom_text_size.h);
+  draw_bounds = GRect(text_left, bounds.origin.y + PBL_IF_ROUND_ELSE(40, 34), bottom_text_size.w, bottom_text_size.h);
   draw_alternating_text(ctx, draw_bounds, bottom_text_count, bottom_texts);
 }
 

@@ -89,6 +89,13 @@
         "resources": {
             "media": [
                 {
+                    "file": "images/menu_icon",
+                    "menuIcon": true,
+                    "name": "IMAGE_MENU_ICON",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
                     "characterRegex": "[0-9:]",
                     "file": "fonts/sparkler_54",
                     "name": "FONT_SPARKLER_54",
@@ -118,7 +125,11 @@
         },
         "sdkVersion": "3",
         "targetPlatforms": [
-            "chalk"
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite",
+            "emery"
         ],
         "uuid": "5e843fcb-4327-40c1-b6f5-3ce0e2356b7b",
         "watchapp": {
