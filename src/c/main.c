@@ -11,7 +11,7 @@
 bool js_ready = false;
 int weather_fetch_countdown = 0;
 AppTimer* vibration_overload_timer = NULL;
-AppTimer* acel_unsubscribe_timer = NULL;
+AppTimer* accel_unsubscribe_timer = NULL;
 bool tapping = false;
 
 void altitude_req_changed(bool required);
@@ -507,10 +507,10 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
   }
 }
 
-void acel_unsubscribe_callback(void *data) {  
-  accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
+void accel_unsubscribe_callback(void *data) {  
+  //accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
   accel_data_service_unsubscribe(); 
-  acel_unsubscribe_timer = NULL;
+  accel_unsubscribe_timer = NULL;
 }
 
 void tap_req_changed(bool required) {
@@ -523,8 +523,8 @@ void tap_req_changed(bool required) {
     // Unsubscribe from accelerator data via timer. 
     // Unsubscribing here, often in an accel event,
     // causes the app to crash.
-    if (!acel_unsubscribe_timer){
-      acel_unsubscribe_timer = app_timer_register(0, acel_unsubscribe_callback, NULL); 
+    if (!accel_unsubscribe_timer){
+      accel_unsubscribe_timer = app_timer_register(0, accel_unsubscribe_callback, NULL); 
     }
   }
 }
