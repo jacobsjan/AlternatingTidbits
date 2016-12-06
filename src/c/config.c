@@ -154,7 +154,7 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   return cfgChanged;
 }
 
-void config_init() {
+void config_load() {
   if (persist_exists(STORAGE_CONFIG) && persist_get_size(STORAGE_CONFIG) == sizeof(actual_config)) {
     // Read config from storage
     persist_read_data(STORAGE_CONFIG, config, sizeof(actual_config));
@@ -224,7 +224,7 @@ void config_init() {
   }
 }
 
-void config_deinit() {
+void config_save() {
   // Save the configuration
   persist_write_data(STORAGE_CONFIG, config, sizeof(actual_config));
 }

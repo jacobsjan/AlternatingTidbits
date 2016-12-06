@@ -74,7 +74,7 @@ struct Config {
 };
 
 bool parse_configuration_messages(DictionaryIterator*);
-void config_init();
-void config_deinit();
+void config_load();
+void config_save();
 
 extern struct Config* config;

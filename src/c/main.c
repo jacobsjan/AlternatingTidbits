@@ -160,6 +160,9 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     // Refetch weather and moonphase in case settings were changed
     fetch_weather();
     fetch_moonphase();
+    
+    // Save configuration
+    config_save();
   }
 }
 
@@ -571,7 +574,7 @@ void update_requirements_changed(enum ModelUpdates prev_req) {
 
 static void app_init() {     
   // Initialize the configuration
-  config_init();
+  config_load();
   
   // Initialize the model
   model->events.on_update_req_change = &update_requirements_changed;
@@ -626,7 +629,7 @@ static void app_deinit() {
   message_queue_deinit();
   
   // Save configuration
-  config_deinit();
+  config_save();
   
   // Save health activity
   #if defined(PBL_HEALTH)
