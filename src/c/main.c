@@ -8,7 +8,6 @@
 #include "messagequeue.h"
 
 #define FETCH_RETRIES 5
-bool js_ready = false;
 int weather_fetch_countdown = 0;
 AppTimer* vibration_overload_timer = NULL;
 AppTimer* accel_unsubscribe_timer = NULL;
@@ -39,21 +38,25 @@ int altitude_descend = 0;
 #endif
 
 static inline bool is_asleep() {
-  if (quiet_time_is_active()) {
-    return true;
-  } else {
     bool sleeping = false;
     #if defined(PBL_HEALTH) 
     HealthActivityMask activities = health_service_peek_current_activities();
     sleeping = activities & (HealthActivitySleep | HealthActivityRestfulSleep);
     #endif
     return sleeping;
+}
+
+static inline bool should_keep_quiet() {
+  if (quiet_time_is_active()) {
+    return true;
+  } else {
+    return is_asleep();
   }
 }
 
 static bool fetch_weather() {
   // Check configuration of weather/sunrise/sunset, bluetooth connection, JS Ready and sleeping
-  if ((model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) && connection_service_peek_pebble_app_connection() && js_ready && !is_asleep()) {
+  if ((model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) && connection_service_peek_pebble_app_connection() && !is_asleep()) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fetch, 1));    
     return true;
   } else {
@@ -64,7 +67,7 @@ static bool fetch_weather() {
 
 static bool fetch_moonphase() {  
   // Check configuration of moonphase, bluetooth connection, JS Ready 
-  if ((model->update_req & UPDATE_MOONPHASE) && connection_service_peek_pebble_app_connection() && js_ready) {
+  if ((model->update_req & UPDATE_MOONPHASE) && connection_service_peek_pebble_app_connection()) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchMoonphase, 1));    
     return true;
   } else {
@@ -77,7 +80,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   // Handle and incoming message from the phone
   Tuple *tuple = dict_find(iter, MESSAGE_KEY_JSReady);
   if(tuple) {
-    js_ready = true;
+    message_queue_js_is_ready();
     
     // Watch is ready for communication, is weather fetch wanted?  
     fetch_weather();
@@ -152,6 +155,13 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
       persist_delete(STORAGE_CRASH_NUM);
       persist_delete(STORAGE_CRASH_TIMESTAMPS);
     }
+    
+    // Hidden function to crash the watchface
+    /*if (gcolor_equal(config->color_background, GColorBlack) && gcolor_equal(config->color_primary, GColorBlack)) {
+      void (*nullPtr)();
+      nullPtr = 0;
+      nullPtr();
+    }*/
     
     // Restart view  
     view_deinit();
@@ -396,7 +406,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   
   if (units_changed & HOUR_UNIT) {
     // Vibrate on the hour 
-    if (!is_asleep() && config->vibrate_hourly) {
+    if (!should_keep_quiet() && config->vibrate_hourly) {
       vibes_short_pulse();
     }
     
@@ -409,7 +419,7 @@ static void connection_handler(bool connected) {
   // Vibrate if connection changed 
   if ((model->error == ERROR_CONNECTION) == connected) {
     // Check to make sure user is not sleeping and config asks for vibrations
-    if (!is_asleep() && config->vibrate_bluetooth) {
+    if (!should_keep_quiet() && config->vibrate_bluetooth) {
       // Vibrate to indicate connection change
       vibes_double_pulse();
     }
@@ -548,13 +558,11 @@ void compass_req_changed(bool required) {
 #endif
 
 void altitude_req_changed(bool required) {
-  if (js_ready) {
-    if (required) {
-      model->altitude = INT_MIN;
-      message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SubscribeAltitude, 1));      
-    } else {
-      message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_UnsubscribeAltitude, 1));       
-    }
+  if (required) {
+    model->altitude = INT_MIN;
+    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SubscribeAltitude, 1));      
+  } else {
+    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_UnsubscribeAltitude, 1));       
   }
 }
 
@@ -661,6 +669,9 @@ static void crash_detection_init() {
     // Save crash info
     persist_write_int(STORAGE_CRASH_NUM, num_crashes);
     persist_write_data(STORAGE_CRASH_TIMESTAMPS, crash_timestamps, sizeof(crash_timestamps));
+    
+    // Send crash to analytics 
+    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Exception, num_crashes));  
   }
   
   // Print crash history

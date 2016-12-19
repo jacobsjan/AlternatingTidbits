@@ -9,10 +9,15 @@ struct MessageQueue {
 };
 
 static MessageQueue* message_queue = NULL;
+bool js_ready = false;
 static bool sending = false;
 
+void message_queue_js_is_ready() {
+  js_ready = true;
+}
+
 void message_queue_send_next() {
-  if (message_queue && !sending) {
+  if (message_queue && js_ready && !sending) {
     DictionaryIterator *iter;
     if(app_message_outbox_begin(&iter) == APP_MSG_OK) {
       sending = true;

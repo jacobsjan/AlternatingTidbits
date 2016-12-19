@@ -8,9 +8,11 @@ try{
 var MessageQueue = require('./libs/js-message-queue');
 var WeatherMan = require('./libs/weather-man');
 var constants = require('./constants');
+var Analytics = require('./libs/analytics.js');
 var keys = require('message_keys');
 var lastSubmittedAltitude = Number.MIN_VALUE;
 var altitudeSubscription = false;
+var analytics = null;
 
 function sendMessage(data) {
   MessageQueue.sendAppMessage(data, ack, nack);
@@ -41,7 +43,6 @@ try {
   } catch (e) {
     console.error(e.toString());
 }
-
 
 // Make the watchface configurable using Clay
 var Clay = require('pebble-clay');
@@ -139,6 +140,19 @@ function nack(e) {
   catch(err) {}
 }
 
+function pingAnalytics() {
+  // Ping maximally twice hourly
+  var lastPing = window.localStorage.getItem('analyticsLastPing');
+  var mSinceLastPing = Math.floor((new Date() - new Date(lastPing)) / (60 * 1000));
+  if (lastPing === undefined || mSinceLastPing >= 30) {
+    console.log("Pinging, last analytics ping was " + mSinceLastPing + "m ago.");
+    analytics.trackEvent('watchface', 'Alive');
+    window.localStorage.setItem('analyticsLastPing', new Date());
+  } else {
+    console.log("Last analytics ping was only " + mSinceLastPing + "m ago.");
+  }
+}
+
 Pebble.addEventListener('ready', function(e) {
   // Inform the watch that the phone is ready for communication
   sendMessage({
@@ -152,36 +166,20 @@ Pebble.addEventListener('ready', function(e) {
     });
   }
   
-  // Timeline test
-  /*var timeline = require('./timeline');
-  
-  // An hour ahead
-  var date = new Date();
-  date.setHours(date.getHours() + 1);
-  
-  // Create the pin
-  var PIN_ID = "timeline-push-pin-test";
-  var pin = {
-      "id": "pin-" + PIN_ID,
-      "time": date.toISOString(),
-      "layout": {
-        "type": "genericPin",
-        "title": "Example Pin",
-        "body": "This is an example pin from the timeline-push-pin example app!",
-        "tinyIcon": "system://images/SCHEDULED_EVENT"
-      }
-    };
-    timeline.insertUserPin(pin, function(responseText) { 
-      console.log('Result: ' + responseText);
-    });*/
+  // Initialize analytics
+  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', '1.3');
+
+  // Signal analytics
+  pingAnalytics();
 });
 
 Pebble.addEventListener('appmessage', function(e) {
+  try {
     console.log('Received message: ' + JSON.stringify(e.payload));
     if (e.payload.Fetch) {
-        fetchLocation();
+      fetchLocation();
     } else if (e.payload.FetchMoonphase) {
-        fetchMoonphase();
+      fetchMoonphase();
     } else if (e.payload.SubscribeAltitude) {
       // Look up altitude every 60 seconds 
       fetchAltitude();
@@ -189,7 +187,15 @@ Pebble.addEventListener('appmessage', function(e) {
     } else if (e.payload.UnsubscribeAltitude) {
       window.clearInterval(altitudeSubscription);
       lastSubmittedAltitude = Number.MIN_VALUE;
+    } else if (e.payload.Exception) {
+      analytics.trackException("C crash " + e.payload.Exception + ".");
     }
+  }
+  catch (err) {
+    analytics.trackException(err);
+  }
+  
+  pingAnalytics();
 });
 
 function fetchAltitude() {

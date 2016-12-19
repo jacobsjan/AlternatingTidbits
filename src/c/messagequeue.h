@@ -1,5 +1,6 @@
 #pragma once
 
+void message_queue_js_is_ready();
 void message_queue_send_next();
 void message_queue_send(Tuplet tuplets[], int tuplet_count);
 void message_queue_send_tuplet(Tuplet tuplet);
