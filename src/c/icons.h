@@ -22,13 +22,15 @@ char* ICON_COUNTDOWN_FROM_TIME = "\uf151";
 char* ICON_COUNTDOWN_TO_DATE = "\uf152";
 char* ICON_COUNTDOWN_FROM_DATE = "\uf153";
 
-char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
-char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)
+char* ICON_HAPPY = "\uf283";
 
 char* ICON_STEP = "\uf2ab";
 char* ICON_WALK = "\uf2b1";
 char* ICON_RUN = "\uf2ae";
 char* ICON_SLEEP = "\uf2af";
+
+char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
+char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)
 
 char* icons_get_weather_condition_symbol(enum WeatherCondition code, bool is_day);
 char* icons_get_battery_symbol(uint8_t charge, bool charging, bool plugged);

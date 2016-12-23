@@ -56,6 +56,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->enable_countdown = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableError);
   if(tuple && (cfgChanged = true)) config->enable_error = tuple->value->int8;
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHappy);
+  if(tuple && (cfgChanged = true)) config->enable_happy = tuple->value->int8;
   #if defined(PBL_HEALTH) 
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHealth);
   if(tuple && (cfgChanged = true)) config->enable_health = tuple->value->int8;
@@ -186,6 +188,7 @@ void config_load() {
     #endif
     config->enable_countdown = false;
     config->enable_error = false;
+    config->enable_health = true;
     #if defined(PBL_HEALTH)
     config->enable_health = true;
     #endif

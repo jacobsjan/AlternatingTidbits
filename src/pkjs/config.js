@@ -244,6 +244,12 @@ module.exports = [
       },
       {
         "type": "toggle",
+        "messageKey": "cfgEnableHappy",
+        "label": "Happy ...",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
         "messageKey": "cfgEnableHealth",
         "label": "Health",
         "defaultValue": true,
@@ -448,6 +454,19 @@ module.exports = [
       { 
         "type": "text", 
         "defaultValue": "Error messages are shown for 15 sec on the watch anyway but enabling this repeats them every few minutes.",
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Happy ..."
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "Wishes you all the best on happy occasions.",
       }
     ]
   },

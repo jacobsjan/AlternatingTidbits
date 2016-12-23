@@ -23,6 +23,7 @@ struct Config {
   #endif
   bool enable_countdown;
   bool enable_error;
+  bool enable_happy;
   #if defined(PBL_HEALTH)
   bool enable_health;
   #endif

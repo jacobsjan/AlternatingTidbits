@@ -13,6 +13,25 @@ enum SuspensionReasons {
   SUSPENSION_SWITCHER = 4,
 };
 
+typedef union 
+{
+    long l;
+    struct 
+    {
+        unsigned short ls;
+        short ms;
+    } s;
+} fixed;
+
+typedef struct 
+{
+    fixed xv, yv;               /* velocity of point */
+    fixed xa, ya;               /* acceleration of point */
+} fireworks_point;
+
+#define FIREWORKS_POINTS 300
+#define FIREWORKS_FRAMES 100
+
 struct Layers {
   // Always shown layers
   TextLayer *hour;
@@ -33,6 +52,7 @@ struct Layers {
   #endif
   Layer *countdown;
   Layer *error;
+  Layer *happy;
   #if defined(PBL_HEALTH)
   Layer *health;
   #endif
@@ -71,6 +91,13 @@ struct View {
   AppTimer* switcher_timeout_timer;
   Animation* switcher_animation;
   AnimationProgress switcher_animation_progress;
+  
+  // Fireworks
+  fixed fireworks_origin_x;
+  fixed fireworks_origin_y;
+  fireworks_point fireworks_points[FIREWORKS_POINTS];
+  Animation* fireworks_animation;
+  AnimationProgress fireworks_animation_progress;
 };
 
 struct View view;
@@ -527,6 +554,99 @@ void error_update_proc(Layer *layer, GContext *ctx) {
   char *texts[] = { text };
   GColor symbol_color = model->error == ERROR_NONE ? config->color_secondary : config->color_accent;
   draw_centered(layer, ctx, symbol, symbol_color, sizeof(texts) / sizeof(texts[0]), texts);
+}
+
+void happy_update_proc(Layer *layer, GContext *ctx) { 
+  // Show fireworks
+  /*graphics_context_set_stroke_color(ctx, config->color_primary);
+  if (view.fireworks_animation) {
+    int frame = (view.fireworks_animation_progress * FIREWORKS_FRAMES) / ANIMATION_NORMALIZED_MAX;
+    
+    for (int i = 0; i < FIREWORKS_POINTS; ++i) {
+      fixed pos_x, pos_y;
+      pos_x.l = view.fireworks_origin_x.l + (frame * view.fireworks_points[i].xv.l) + (frame * view.fireworks_points[i].xa.l * view.fireworks_points[i].xa.l);
+      pos_y.l = view.fireworks_origin_y.l + (frame * view.fireworks_points[i].yv.l) + (frame * view.fireworks_points[i].ya.l * view.fireworks_points[i].ya.l);
+      
+      // Draw the spark
+      graphics_draw_pixel(ctx, GPoint(pos_x.s.ms, pos_y.s.ms));
+    }
+  }*/
+  
+  // Determine text to be shown
+  char year[5];
+  strftime(year, sizeof(year), "%Y", model->time);
+  
+  // Draw
+  char *middle_texts[] = { "Happy" };
+  char *bottom_texts[] = { NULL, year };
+  draw_multi_centered(layer, ctx, ICON_HAPPY, config->color_secondary, 0, 0, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
+}
+
+static void fireworks_animation_update(Animation *animation, const AnimationProgress progress) {
+  view.fireworks_animation_progress = progress;
+  if (view.layers.happy) layer_mark_dirty(view.layers.happy);
+}
+
+static void fireworks_animation_teardown(Animation *animation) {
+  if (view.fireworks_animation)
+  { 
+    animation_unschedule(view.fireworks_animation);
+    animation_destroy(view.fireworks_animation);
+    view.fireworks_animation = NULL;
+  }
+}
+
+void set_of_fireworks(GRect bounds) {
+  // Based on EXPLOD.C by (C) 1989 Dennis Lo
+  // Prepare fireworks points  
+  int cx = bounds.origin.x + bounds.size.w / 2;
+  int cy = bounds.origin.y + bounds.size.h / 2;
+  int Xsize = bounds.size.w / 5;
+  int Ysize = bounds.size.h / 4;
+  
+  view.fireworks_origin_x.l = ((long) cx) * 65536; // Convert to fixed point
+  view.fireworks_origin_y.l = ((long) cy) * 65536;
+  long dest_x;
+  long dest_y;
+  
+  /*for (int i = 0; i < FIREWORKS_POINTS; i++) 
+  {  
+    // Randomly select a destination that is inside the ellipse with
+    // X and Y radii of (Xsize, Ysize).
+    do 
+    {
+      dest_x = (rand() % (2 * Xsize)) - Xsize;
+      dest_y = (rand() % (2 * Ysize)) - Ysize;
+    } while ((long) Ysize * Ysize * dest_x * dest_x + 
+             (long) Xsize * Xsize * dest_y * dest_y
+             > (long) Ysize * Ysize * Xsize * Xsize);
+
+    // Convert to fixed pt. Can't use shifts because they are unsigned
+    dest_x = (dest_x + cx) * 65536;
+    dest_y = (dest_y + cy) * 65536;
+
+    // accel = 2 * distance / #steps^2   (#steps is equivalent to time)
+    // vel = accel * #steps 
+    long accel = (2 * (dest_x - view.fireworks_origin_x.l)) / ((long) FIREWORKS_FRAMES * FIREWORKS_FRAMES);
+    long vel = (2 * (dest_x - view.fireworks_origin_x.l)) / (long) FIREWORKS_FRAMES;
+    view.fireworks_points[i].xa.l = -accel;
+    view.fireworks_points[i].xv.l = vel;
+
+    accel = (2 * (dest_y - view.fireworks_origin_y.l)) / ((long) FIREWORKS_FRAMES * FIREWORKS_FRAMES);
+    vel = (2 * (dest_y - view.fireworks_origin_y.l)) / (long) FIREWORKS_FRAMES; 
+    view.fireworks_points[i].ya.l = -accel + 1500; // + Gravity
+    view.fireworks_points[i].yv.l = vel;
+  }*/
+  
+  // Animate the fireworks
+  /*view.fireworks_animation = animation_create();
+  animation_set_duration(view.fireworks_animation, 2000);
+  static const AnimationImplementation implementation = {
+    .update = fireworks_animation_update,
+    .teardown = fireworks_animation_teardown
+  };
+  animation_set_implementation(view.fireworks_animation, &implementation);
+  animation_schedule(view.fireworks_animation);*/
 }
 
 #if defined(PBL_HEALTH)
@@ -1388,11 +1508,17 @@ void main_window_load(Window *window) {
   view.layers.date_bottom = layer_create(GRect(0, PBL_IF_ROUND_ELSE(132, 122), bounds.size.w, 30));
   update_proc = config->date_format_bottom[0] == 'z' ? week_bar_monday_update_proc : config->date_format_bottom[0] == 'Z' ? week_bar_sunday_update_proc : date_bottom_update_proc;
   layer_set_update_proc(view.layers.date_bottom, update_proc);
-  layer_add_child(window_layer, view.layers.date_bottom);
+  layer_add_child(window_layer, view.layers.date_bottom);   
   
-  // Create non-model update besed alternating layers
+  APP_LOG(APP_LOG_LEVEL_INFO, "Got to before happy layer creation");
+  // Create non-model update based alternating layers
+  if (config->enable_countdown) view.layers.countdown = alternating_layers_create(countdown_update_proc, ICON_COUNTDOWN_TO_TIME);
+  if (config->enable_happy) view.layers.happy = alternating_layers_create(happy_update_proc, ICON_HAPPY);
   if (config->enable_timezone) view.layers.timezone = alternating_layers_create(timezone_update_proc, ICON_TIMEZONE);
-  if (config->enable_countdown) view.layers.countdown = alternating_layers_create(countdown_update_proc, ICON_COUNTDOWN_TO_TIME);  
+  APP_LOG(APP_LOG_LEVEL_INFO, "Got to after happy layer creation");
+  
+  // Set of fireworks 
+  //set_of_fireworks(bounds);
   
   // Update time text
   time_changed();
@@ -1417,6 +1543,7 @@ void main_window_unload(Window *window) {
   if (view.layers.weather) layer_destroy(view.layers.weather);
   if (view.layers.sunrise_sunset) layer_destroy(view.layers.sunrise_sunset);
   if (view.layers.timezone) layer_destroy(view.layers.timezone);
+  if (view.layers.happy) layer_destroy(view.layers.happy);
   #if defined(PBL_HEALTH)
   if (view.layers.health) layer_destroy(view.layers.health);
   #endif
@@ -1489,12 +1616,12 @@ void view_init() {
     evaluate_moonphase_req();
   }
   
-  // Initialize some layers
-  if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
+  // Create non-model update based alternating layers
   if (config->enable_battery) battery_changed();
+  if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
   #if defined(PBL_HEALTH)
   if (config->enable_health) activity_changed();
-  #endif
+  #endif  
 }
 
 void view_deinit() {  
