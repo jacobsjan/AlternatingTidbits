@@ -3,6 +3,8 @@
 #include "config.h"
 #include "model.h"
 #include "icons.h"
+#include "utils.h"
+#include "messagequeue.h"
 
 void evaluate_moonphase_req();
 
@@ -14,10 +16,15 @@ enum SuspensionReasons {
 };
 
 #define FIREWORKS_NUM 3
+#ifdef PBL_PLATFORM_APLITE
+#define FIREWORKS_POINTS 100
+#endif
+#ifndef PBL_PLATFORM_APLITE
 #define FIREWORKS_POINTS 300
-#define FIREWORKS_FRAMES 100
-#define FIREWORKS_TOTAL_DURATION 30000
-#define FIREWORKS_DURATION ((2000 * ANIMATION_NORMALIZED_MAX) / FIREWORKS_TOTAL_DURATION)
+#endif
+#define FIREWORKS_FRAMES 256
+#define FIREWORKS_TOTAL_DURATION 60
+#define FIREWORKS_DURATION ((2000 * ANIMATION_NORMALIZED_MAX) / (FIREWORKS_TOTAL_DURATION * 1000))
 
 struct Layers {
   // Always shown layers
@@ -57,6 +64,24 @@ struct Fonts {
   GFont icons_large;
 };
 
+struct Fireworks {  
+  int origin_x[FIREWORKS_NUM];
+  int origin_y[FIREWORKS_NUM];
+  int starts[FIREWORKS_NUM];
+  int sizes[FIREWORKS_NUM];
+  bool vibrated[FIREWORKS_NUM];
+  #if defined(PBL_COLOR)
+  GColor colors1[FIREWORKS_NUM];
+  GColor colors2[FIREWORKS_NUM];
+  GColor colors3[FIREWORKS_NUM];
+  #endif
+  short vels_x[FIREWORKS_POINTS];
+  short vels_y[FIREWORKS_POINTS];
+  short accel_factors[FIREWORKS_FRAMES];
+  Animation* animation;
+  AnimationProgress animation_progress;
+};
+
 struct View {
   Window *window;
   struct Layers layers;
@@ -81,21 +106,8 @@ struct View {
   AnimationProgress switcher_animation_progress;
   
   // Fireworks
+  struct Fireworks* fireworks;
   time_t fireworks_time;
-  int fireworks_origin_x[FIREWORKS_NUM];
-  int fireworks_origin_y[FIREWORKS_NUM];
-  int fireworks_starts[FIREWORKS_NUM];
-  int fireworks_sizes[FIREWORKS_NUM];
-  #if defined(PBL_COLOR)
-  GColor fireworks_colors1[FIREWORKS_NUM];
-  GColor fireworks_colors2[FIREWORKS_NUM];
-  GColor fireworks_colors3[FIREWORKS_NUM];
-  #endif
-  int fireworks_vels_x[FIREWORKS_POINTS];
-  int fireworks_vels_y[FIREWORKS_POINTS];
-  int fireworks_accel_factors[FIREWORKS_FRAMES];
-  Animation* fireworks_animation;
-  AnimationProgress fireworks_animation_progress;
 };
 
 struct View view;
@@ -565,65 +577,79 @@ void happy_update_proc(Layer *layer, GContext *ctx) {
   draw_multi_centered(layer, ctx, ICON_HAPPY, config->color_secondary, 0, 0, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
 }
 
+void happy_countdown_update_proc(Layer *layer, GContext *ctx) { 
+  // Determine text to be shown
+  time_t diff = view.fireworks_time - time(NULL);
+  char count[3];
+  snprintf(count, sizeof(count), "%d", (int)diff);
+  
+  // Determine text position
+  GRect bounds = layer_get_bounds(layer);
+  GSize text_size = graphics_text_layout_get_content_size(count, view.fonts.primary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+  int text_left = bounds.origin.x + (bounds.size.w - text_size.w) / 2;
+  int text_top = bounds.origin.y + (bounds.size.h - text_size.h) / 2;
+  
+  // Clear the background
+  graphics_context_set_fill_color(ctx, config->color_background);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  
+  // Draw the text
+  GRect draw_bounds = GRect(text_left, text_top, text_size.w, text_size.h);
+  graphics_context_set_text_color(ctx, config->color_primary);
+  graphics_draw_text(ctx, count, view.fonts.primary, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);  
+}
+
 void initiate_fireworks(GRect bounds, int n, int start_base) {
   // Origin
   int cx = (rand() % (bounds.size.w / 2)) + (bounds.size.w / 4);
   int cy = (rand() % (bounds.size.h / 2)) + (bounds.size.h / 4);
-  view.fireworks_origin_x[n] = cx * (1 << 16); // Convert to fixed point
-  view.fireworks_origin_y[n] = cy * (1 << 16);
+  view.fireworks->origin_x[n] = cx * (1 << 16); // Convert to fixed point
+  view.fireworks->origin_y[n] = cy * (1 << 16);
 
   // Start
-  view.fireworks_starts[n] = start_base + rand() % (FIREWORKS_DURATION / 2);
+  view.fireworks->starts[n] = start_base + rand() % (FIREWORKS_DURATION / 2);
   
   // Size
-  view.fireworks_sizes[n] = 75 + rand() % 75;
+  view.fireworks->sizes[n] = 75 + rand() % 75;
+  
+  // Has been vibrated for
+  view.fireworks->vibrated[n] = false;
 
   // Color
   #if defined(PBL_COLOR)
   switch (rand() % 6) {
     case 0:
-      view.fireworks_colors1[n] = GColorPastelYellow;
-      view.fireworks_colors2[n] = GColorYellow;
-      view.fireworks_colors3[n] = GColorChromeYellow;
+      view.fireworks->colors1[n] = GColorPastelYellow;
+      view.fireworks->colors2[n] = GColorYellow;
+      view.fireworks->colors3[n] = GColorChromeYellow;
       break;
     case 1: 
-      view.fireworks_colors1[n] = GColorMelon;
-      view.fireworks_colors2[n] = GColorRed;
-      view.fireworks_colors3[n] = GColorDarkCandyAppleRed;
+      view.fireworks->colors1[n] = GColorMelon;
+      view.fireworks->colors2[n] = GColorRed;
+      view.fireworks->colors3[n] = GColorDarkCandyAppleRed;
       break;    
     case 2:
-      view.fireworks_colors1[n] = GColorBabyBlueEyes;
-      view.fireworks_colors2[n] = GColorBlue;
-      view.fireworks_colors3[n] = GColorDukeBlue;
+      view.fireworks->colors1[n] = GColorBabyBlueEyes;
+      view.fireworks->colors2[n] = GColorBlue;
+      view.fireworks->colors3[n] = GColorDukeBlue;
       break;    
     case 3:
-      view.fireworks_colors1[n] = GColorMintGreen;
-      view.fireworks_colors2[n] = GColorGreen;
-      view.fireworks_colors3[n] = GColorIslamicGreen;
+      view.fireworks->colors1[n] = GColorMintGreen;
+      view.fireworks->colors2[n] = GColorGreen;
+      view.fireworks->colors3[n] = GColorIslamicGreen;
       break;    
     case 4:
-      view.fireworks_colors1[n] = GColorCeleste;
-      view.fireworks_colors2[n] = GColorCyan;
-      view.fireworks_colors3[n] = GColorTiffanyBlue;
+      view.fireworks->colors1[n] = GColorCeleste;
+      view.fireworks->colors2[n] = GColorCyan;
+      view.fireworks->colors3[n] = GColorTiffanyBlue;
       break;    
     case 5:
     default:
-      view.fireworks_colors1[n] = GColorRichBrilliantLavender;  
-      view.fireworks_colors2[n] = GColorMagenta;  
-      view.fireworks_colors3[n] = GColorPurple;   
+      view.fireworks->colors1[n] = GColorRichBrilliantLavender;  
+      view.fireworks->colors2[n] = GColorMagenta;  
+      view.fireworks->colors3[n] = GColorPurple;   
   }
   #endif 
-}
-
-void* test_buffer = NULL;
-
-void fireworks_update_proc_test(Layer *layer, GContext *ctx) { 
-  graphics_context_set_stroke_color(ctx, config->color_primary);
-  GRect bounds = layer_get_bounds(layer);  
-  graphics_draw_pixel(ctx, GPoint(rand() % bounds.size.w, rand() % bounds.size.h));
-  
-  if (test_buffer) free(test_buffer);
-  test_buffer = malloc(4); //1 + rand() % 1024);
 }
 
 void fireworks_update_proc(Layer *layer, GContext *ctx) { 
@@ -633,27 +659,18 @@ void fireworks_update_proc(Layer *layer, GContext *ctx) {
   #endif 
   
   for (int n = 0; n < FIREWORKS_NUM; ++n) {
-    if (view.fireworks_animation_progress > view.fireworks_starts[n] + FIREWORKS_DURATION) {
+    if (view.fireworks->animation_progress > view.fireworks->starts[n] + FIREWORKS_DURATION) {
       // Make sure the animation is not almost over
-      if (view.fireworks_animation_progress < ANIMATION_NORMALIZED_MAX - FIREWORKS_DURATION) {
+      if (view.fireworks->animation_progress < ANIMATION_NORMALIZED_MAX - FIREWORKS_DURATION) {
         // Choose new start for this firework
-        initiate_fireworks(bounds, n, view.fireworks_animation_progress);
+        initiate_fireworks(bounds, n, view.fireworks->animation_progress);
       }
-    } else if (view.fireworks_animation_progress > view.fireworks_starts[n]) {
+    } else if (view.fireworks->animation_progress > view.fireworks->starts[n]) {
       // Show fireworks
-      int frame = ((view.fireworks_animation_progress - view.fireworks_starts[n]) * FIREWORKS_FRAMES) / FIREWORKS_DURATION;
+      int frame = ((view.fireworks->animation_progress - view.fireworks->starts[n]) * FIREWORKS_FRAMES) / FIREWORKS_DURATION;
       if (frame >= FIREWORKS_FRAMES) frame = FIREWORKS_FRAMES - 1;
-      int accel_factor = view.fireworks_accel_factors[frame];
+      int accel_factor = view.fireworks->accel_factors[frame];
       int fading = frame - (FIREWORKS_FRAMES / 2); // Start fading from the second half of the fireworks
-      #if defined(PBL_COLOR)
-      if (frame >= FIREWORKS_FRAMES / 2) {
-        graphics_context_set_stroke_color(ctx, view.fireworks_colors3[n]);
-      } else if (frame >= FIREWORKS_FRAMES / 5) {
-        graphics_context_set_stroke_color(ctx, view.fireworks_colors2[n]);
-      } else {
-        graphics_context_set_stroke_color(ctx, view.fireworks_colors1[n]);
-      }
-      #endif 
          
       // Quick method for converting fixed point back to shorts
       union { 
@@ -666,32 +683,64 @@ void fireworks_update_proc(Layer *layer, GContext *ctx) {
       
       for (int i = 0; i < FIREWORKS_POINTS; ++i) {
         if (fading <= 0 || i % (FIREWORKS_FRAMES / 2) > fading) {                
-          pos_x.i = view.fireworks_origin_x[n] + view.fireworks_sizes[n] * (frame * view.fireworks_vels_x[i] - (accel_factor * view.fireworks_vels_x[i]) / FIREWORKS_FRAMES) / 100;
-          pos_y.i = view.fireworks_origin_y[n] + view.fireworks_sizes[n] * (frame * view.fireworks_vels_y[i] - (accel_factor * (view.fireworks_vels_y[i] - 50000)) / FIREWORKS_FRAMES) / 100; // - Gravity
+          pos_x.i = view.fireworks->origin_x[n] + view.fireworks->sizes[n] * (frame * view.fireworks->vels_x[i] - (accel_factor * view.fireworks->vels_x[i]) / FIREWORKS_FRAMES) / 100;
+          pos_y.i = view.fireworks->origin_y[n] + view.fireworks->sizes[n] * (frame * view.fireworks->vels_y[i] - (accel_factor * (view.fireworks->vels_y[i] - 50000)) / FIREWORKS_FRAMES) / 100; // - Gravity
     
           // Draw the spark
           GPoint p = GPoint(pos_x.s.h, pos_y.s.h);
-          /*if (grect_contains_point(&bounds, &p)) */graphics_draw_pixel(ctx, p);
+          #if defined(PBL_COLOR)
+          int x_dir = (view.fireworks->vels_x[i] < 0) ? 1 : -1;
+          graphics_context_set_stroke_color(ctx, view.fireworks->colors3[n]);
+          graphics_draw_pixel(ctx, p);
+          graphics_context_set_stroke_color(ctx, view.fireworks->colors2[n]);
+          graphics_draw_pixel(ctx, GPoint(p.x + x_dir, p.y));
+          graphics_draw_pixel(ctx, GPoint(p.x, p.y - 1));
+          graphics_context_set_stroke_color(ctx, view.fireworks->colors1[n]);
+          graphics_draw_pixel(ctx, GPoint(p.x + x_dir, p.y - 1));
+          #endif
+          #if defined(PBL_BW)
+          graphics_draw_pixel(ctx, p);
+          graphics_draw_pixel(ctx, GPoint(p.x + 1, p.y));
+          graphics_draw_pixel(ctx, GPoint(p.x, p.y + 1));
+          graphics_draw_pixel(ctx, GPoint(p.x + 1, p.y + 1));
+          #endif
         }
-      }  
+      }        
+                
+      // Vibrate 
+      if (!view.fireworks->vibrated[n] && !should_keep_quiet()) {
+        static const uint32_t const segments[] = { 50 };
+        VibePattern pat = {
+          .durations = segments,
+          .num_segments = sizeof(segments) / sizeof(segments[0]),
+        };
+        vibes_enqueue_custom_pattern(pat);
+        view.fireworks->vibrated[n] = true;
+      }
     }
   }
 }
 
 static void fireworks_animation_update(Animation *animation, const AnimationProgress progress) {
-  view.fireworks_animation_progress = progress;
+  if (view.fireworks) view.fireworks->animation_progress = progress;
   if (view.layers.fireworks) layer_mark_dirty(view.layers.fireworks);
 }
 
 static void fireworks_animation_teardown(Animation *animation) {
-  // Destroy animation
-  if (view.fireworks_animation)
-  { 
-    animation_unschedule(view.fireworks_animation);
-    animation_destroy(view.fireworks_animation);
-    view.fireworks_animation = NULL;
-  }
+  if (view.fireworks) {
+    // Destroy animation
+    if (view.fireworks->animation)
+    { 
+      animation_unschedule(view.fireworks->animation);
+      animation_destroy(view.fireworks->animation);
+      view.fireworks->animation = NULL;
+    }
   
+    // Free fireworks memory
+    free(view.fireworks);
+    view.fireworks = NULL;
+  }
+    
   // Destroy layer  
   if (view.layers.fireworks) {
     layer_remove_from_parent(view.layers.fireworks);
@@ -700,10 +749,12 @@ static void fireworks_animation_teardown(Animation *animation) {
   }
 }
 
-void set_of_fireworks() {
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Start of set_of_fireworks().");
- 
+void set_of_fireworks(int number_of_seconds) {
   // Based on EXPLOD.C by (C) 1989 Dennis Lo
+  // Allocate fireworks memory
+  view.fireworks = (struct Fireworks*)malloc(sizeof(struct Fireworks));
+  if (!view.fireworks) return;
+  
   // Initialize individual fireworks
   Layer *window_layer = window_get_root_layer(view.window);
   GRect bounds = layer_get_bounds(window_layer);
@@ -732,59 +783,63 @@ void set_of_fireworks() {
 
     // accel = 2 * distance / #steps^2   (#steps is equivalent to time)
     // vel = accel * #steps 
-    view.fireworks_vels_x[i] = (2 * dest_x) / FIREWORKS_FRAMES;
-    view.fireworks_vels_y[i] = (2 * dest_y) / FIREWORKS_FRAMES; 
+    view.fireworks->vels_x[i] = (2 * dest_x) / FIREWORKS_FRAMES;
+    view.fireworks->vels_y[i] = (2 * dest_y) / FIREWORKS_FRAMES; 
   }
   
   // Initialize the fireworks acceleration lookups
-  if (view.fireworks_accel_factors[FIREWORKS_FRAMES - 1] == 0) {
-    view.fireworks_accel_factors[0] = 0;
+  if (view.fireworks->accel_factors[FIREWORKS_FRAMES - 1] == 0) {
+    view.fireworks->accel_factors[0] = 0;
     for (int i = 1; i < FIREWORKS_FRAMES; ++i) {
-      view.fireworks_accel_factors[i] = view.fireworks_accel_factors[i - 1] + i;
+      view.fireworks->accel_factors[i] = view.fireworks->accel_factors[i - 1] + i;
     }
   }
   
   // Create layer
   if (!view.layers.fireworks) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Initializing layer.");
     view.layers.fireworks = layer_create(bounds);
-    layer_set_update_proc(view.layers.fireworks, fireworks_update_proc);
     layer_add_child(window_layer, view.layers.fireworks);
   }
   
+  // Set the update_proc for fireworks layer, possibly switching from showing countdown
+  layer_set_update_proc(view.layers.fireworks, fireworks_update_proc);
+  
   // Animate the fireworks
-  if (!view.fireworks_animation) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Initializing animation.");
-    view.fireworks_animation_progress = 0;
-    view.fireworks_animation = animation_create();
-    animation_set_duration(view.fireworks_animation, 55000); //FIREWORKS_TOTAL_DURATION);
-    animation_set_curve(view.fireworks_animation, AnimationCurveLinear);
+  if (!view.fireworks->animation) {
+    view.fireworks->animation_progress = 0;
+    view.fireworks->animation = animation_create();
+    animation_set_duration(view.fireworks->animation, number_of_seconds * 1000); 
+    animation_set_curve(view.fireworks->animation, AnimationCurveLinear);
     static const AnimationImplementation implementation = {
       .update = fireworks_animation_update,
       .teardown = fireworks_animation_teardown
     };
-    animation_set_implementation(view.fireworks_animation, &implementation);
-    animation_schedule(view.fireworks_animation);
-  }
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "End of set_of_fireworks().");
+    animation_set_implementation(view.fireworks->animation, &implementation);
+    animation_schedule(view.fireworks->animation);
+  } 
+  
+  // Send fireworks to analytics 
+  message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fireworks, 0)); 
 }
 
 #if defined(PBL_HEALTH)
 char* alloc_print_d(char* fmt, int i) {
   int size = snprintf(NULL, 0, fmt, i);
   char* result = (char*)malloc((size + 1) * sizeof(char));
-  snprintf(result, size + 1, fmt, i);
+  if (result) snprintf(result, size + 1, fmt, i);
   return result;
 }
 
 char* alloc_print_s(char* s) {
   int size = strlen(s);
   char* result = (char*)malloc((size + 1) * sizeof(char));
-  return strncpy(result, s, size + 1);
+  if (result) strncpy(result, s, size + 1);
+  return result;
 }
 
 char** health_generate_texts(enum HealthIndicator indicator) {
   char** result = (char**)malloc(4 * sizeof(char*));
+  if (!result) return NULL;
   int metric = -1;
   int distance;
   switch (indicator) {
@@ -1022,21 +1077,25 @@ void date_update_proc(Layer *layer, GContext *ctx, char* format) {
       // Date element
       normalText = (char*)malloc(20 * sizeof(char));
       accentText = NULL;
-      char strfmt[] = "%x";
-      strfmt[1] = element;
-      strftime(normalText, 20, strfmt, model->time);
-      
-      if ((format[i] == 'n' && normalText[0] == '0') || (element == 'e' && normalText[0] == ' ')) {
-        // Remove leading 0 of month or leading space of day
-        normalText[0] = normalText[1];
-        normalText[1] = normalText[2];
+      if (normalText) {
+        char strfmt[] = "%x";
+        strfmt[1] = element;
+        strftime(normalText, 20, strfmt, model->time);
+        
+        if ((format[i] == 'n' && normalText[0] == '0') || (element == 'e' && normalText[0] == ' ')) {
+          // Remove leading 0 of month or leading space of day
+          normalText[0] = normalText[1];
+          normalText[1] = normalText[2];
+        }
       }
     } else {
       // Separartor element
       normalText = NULL;
       accentText = (char*)malloc(2 * sizeof(char));
-      accentText[0] = element;
-      accentText[1] = 0;
+      if (accentText) {
+        accentText[0] = element;
+        accentText[1] = 0;
+      }
     }
     
     texts[i * 2] = normalText;
@@ -1279,33 +1338,95 @@ Layer* alternating_layers_destroy(Layer* layer) {
   return NULL;
 }
 
-void time_changed() {
-  // Write the current time, weekday and date into buffers
-  static char s_hour_buffer[3];
-  strftime(s_hour_buffer, sizeof(s_hour_buffer), clock_is_24h_style() ? "%H" : "%I", model->time);
-  static char s_minute_buffer[3];
-  strftime(s_minute_buffer, sizeof(s_minute_buffer), "%M", model->time);
-  
-  // Remove hours leading zero
-  if (s_hour_buffer[0] == '0' && !config->date_hours_leading_zero) {
-    s_hour_buffer[0] = s_hour_buffer[1];
-    s_hour_buffer[1] = s_hour_buffer[2];
+void evaluate_happiness() {
+  if (config->enable_happy) {
+    time_t diff = view.fireworks_time - time(NULL);
+    
+    // Check layer
+    if (!view.layers.happy) {
+      // The happy layer does not yet exist, create it if needed
+      if (diff <= 0 && diff > -SECONDS_PER_DAY) {
+        view.layers.happy = alternating_layers_create(happy_update_proc, ICON_HAPPY);
+        alternating_layers_show_layer(view.layers.happy);
+      } 
+    } else {
+      // Remove the happy layer if needed if needed
+      if (diff > 0 || diff <= -SECONDS_PER_DAY) {
+        alternating_layers_remove(view.layers.happy);
+        view.layers.happy = NULL;
+      } 
+    }
+    
+    // Check countdown & fireworks
+    if (diff <= SECONDS_PER_MINUTE && diff > 0) {
+      // Less than a minute to go till fireworks
+      // Ask for ticks every second 
+      model_add_update_req(UPDATE_SECOND_TICKS);
+      
+      if (diff <= 10) {
+        // Create layer if necessary
+        if (!view.layers.fireworks) {
+          Layer *window_layer = window_get_root_layer(view.window);
+          GRect bounds = layer_get_bounds(window_layer);
+          view.layers.fireworks = layer_create(bounds);
+          layer_set_update_proc(view.layers.fireworks, happy_countdown_update_proc);
+          layer_add_child(window_layer, view.layers.fireworks);
+        }
+        
+        // Vibrate 
+        if (!should_keep_quiet()) {
+          static uint32_t segments[] = { 200 };
+          VibePattern pat = {
+            .durations = segments,
+            .num_segments = sizeof(segments) / sizeof(segments[0]),
+          };
+          vibes_enqueue_custom_pattern(pat);
+        }
+        
+        // Update countdown
+        layer_mark_dirty(view.layers.fireworks);
+      }
+    } else if (diff <= 0 && diff > -FIREWORKS_TOTAL_DURATION){
+      // Reset ticks to every minute
+      model_remove_update_req(UPDATE_SECOND_TICKS);
+      
+      // Show fireworks 
+      set_of_fireworks(FIREWORKS_TOTAL_DURATION - diff);
+    }
   }
+}
 
-  // Display time
-  text_layer_set_text(view.layers.hour, s_hour_buffer);
-  text_layer_set_text(view.layers.minute, s_minute_buffer);
+void time_changed(TimeUnits units_changed) {
+  if (units_changed & MINUTE_UNIT) {
+    // Write the current time, weekday and date into buffers
+    static char s_hour_buffer[3];
+    strftime(s_hour_buffer, sizeof(s_hour_buffer), clock_is_24h_style() ? "%H" : "%I", model->time);
+    static char s_minute_buffer[3];
+    strftime(s_minute_buffer, sizeof(s_minute_buffer), "%M", model->time);
+    
+    // Remove hours leading zero
+    if (s_hour_buffer[0] == '0' && !config->date_hours_leading_zero) {
+      s_hour_buffer[0] = s_hour_buffer[1];
+      s_hour_buffer[1] = s_hour_buffer[2];
+    }
   
-  // Alternate every minute to the next available layer
-  if (view.suspension_reason == SUSPENSION_NONE && view.alt_layer_count > 0 && config->alternate_mode != 'S') { 
-    // Not on suspension, alternate layer
-    alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
+    // Display time
+    text_layer_set_text(view.layers.hour, s_hour_buffer);
+    text_layer_set_text(view.layers.minute, s_minute_buffer);
+    
+    // Alternate every minute to the next available layer
+    if (view.suspension_reason == SUSPENSION_NONE && view.alt_layer_count > 0 && config->alternate_mode != 'S') { 
+      // Not on suspension, alternate layer
+      alternating_layers_show((view.alt_layer_visible + 1) % view.alt_layer_count);
+    }
+    
+    // Check visibility of moonphase based on day or night time
+    if (config->enable_moonphase) evaluate_moonphase_req();
   }
   
-  // Check visibility of moonphase based on day or night time
-  if (config->enable_moonphase) evaluate_moonphase_req();
-  
-  set_of_fireworks();
+  // Check whether a happy layer or fireworks should be shown
+  // We evaluate this possibly every second right before and during countdown
+  evaluate_happiness();
 }
 
 void evaluate_altitude_req() {
@@ -1628,9 +1749,6 @@ void main_window_load(Window *window) {
   update_proc = config->date_format_bottom[0] == 'z' ? week_bar_monday_update_proc : config->date_format_bottom[0] == 'Z' ? week_bar_sunday_update_proc : date_bottom_update_proc;
   layer_set_update_proc(view.layers.date_bottom, update_proc);
   layer_add_child(window_layer, view.layers.date_bottom);   
-  
-  // Update time text
-  time_changed();
 }
 
 void main_window_unload(Window *window) {
@@ -1728,29 +1846,35 @@ void view_init() {
   if (config->enable_battery) battery_changed();
   if (config->enable_countdown) view.layers.countdown = alternating_layers_create(countdown_update_proc, ICON_COUNTDOWN_TO_TIME);
   if (model->error != ERROR_NONE) error_changed(ERROR_NONE);
-  if (config->enable_happy) view.layers.happy = alternating_layers_create(happy_update_proc, ICON_HAPPY);
+  evaluate_happiness(); 
   #if defined(PBL_HEALTH)
   if (config->enable_health) activity_changed();
   #endif
   if (config->enable_timezone) view.layers.timezone = alternating_layers_create(timezone_update_proc, ICON_TIMEZONE);
   
   // Calculate time of next fireworks
-  struct tm start_of_year = *model->time;
+  struct tm start_of_year = *model->time;/*
   start_of_year.tm_sec = 0;
   start_of_year.tm_min = 0;
   start_of_year.tm_hour = 0;
   start_of_year.tm_mday = 1;
   start_of_year.tm_mon = 0;
-  start_of_year.tm_year += 1; // Next year
+  start_of_year.tm_year += 1; // Next year*/
+  
+  start_of_year.tm_sec = 0;
+  start_of_year.tm_min = 35;
+  start_of_year.tm_hour = 23;
+  
   view.fireworks_time = mktime(&start_of_year);
+  
+  // Update time text
+  time_changed((TimeUnits)-1);
 }
 
 void view_deinit() {  
   // Stop animations
-  //switcher_animation_teardown(view.switcher_animation);
-  //fireworks_animation_teardown(view.fireworks_animation);
-  animation_unschedule(view.switcher_animation);
-  animation_unschedule(view.fireworks_animation);
+  switcher_animation_teardown(view.switcher_animation);
+  fireworks_animation_teardown(NULL);
     
   // Stop timers
   if (view.alert_timeout_handler) app_timer_cancel(view.alert_timeout_handler);

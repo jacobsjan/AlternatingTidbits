@@ -124,6 +124,9 @@ Pebble.addEventListener('webviewclosed', function(e) {
   
   // Reload settings
   settings = JSON.parse(localStorage.getItem('clay-settings'));
+  
+  // Send settings set to analytics
+  analytics.trackEvent('watchface', 'Settings');
 });
 
 function ack(e) {
@@ -141,10 +144,10 @@ function nack(e) {
 }
 
 function pingAnalytics() {
-  // Ping maximally twice hourly
+  // Ping maximally once daily
   var lastPing = window.localStorage.getItem('analyticsLastPing');
   var mSinceLastPing = Math.floor((new Date() - new Date(lastPing)) / (60 * 1000));
-  if (lastPing === undefined || mSinceLastPing >= 30) {
+  if (lastPing === undefined || mSinceLastPing >= 60 * 24) {
     console.log("Pinging, last analytics ping was " + mSinceLastPing + "m ago.");
     analytics.trackEvent('watchface', 'Alive');
     window.localStorage.setItem('analyticsLastPing', new Date());
@@ -189,6 +192,8 @@ Pebble.addEventListener('appmessage', function(e) {
       lastSubmittedAltitude = Number.MIN_VALUE;
     } else if (e.payload.Exception) {
       analytics.trackException("C crash " + e.payload.Exception + ".");
+    } else if (e.payload.Fireworks) {
+      analytics.trackEvent('watchface', 'Fireworks');
     }
   }
   catch (err) {

@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "model.h"
+#include "utils.h"
 #include "view.h"
 #include "storage.h"
 #include "messagequeue.h"
@@ -36,23 +37,6 @@ int activity_buffer_index;
 int altitude_climb = 0;
 int altitude_descend = 0;
 #endif
-
-static inline bool is_asleep() {
-    bool sleeping = false;
-    #if defined(PBL_HEALTH) 
-    HealthActivityMask activities = health_service_peek_current_activities();
-    sleeping = activities & (HealthActivitySleep | HealthActivityRestfulSleep);
-    #endif
-    return sleeping;
-}
-
-static inline bool should_keep_quiet() {
-  if (quiet_time_is_active()) {
-    return true;
-  } else {
-    return is_asleep();
-  }
-}
 
 static bool fetch_weather() {
   // Check configuration of weather/sunrise/sunset and sleeping
@@ -400,11 +384,6 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     #if defined(PBL_HEALTH)
     if (model->update_req & UPDATE_HEALTH) update_health();
     #endif
-    
-    // Update the displayed time
-    static struct tm time_copy;
-    time_copy = *tick_time;
-    model_set_time(&time_copy);
   }
   
   if (units_changed & HOUR_UNIT) {
@@ -415,6 +394,19 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     
     // Refresh moonphase if required
     fetch_moonphase();
+  }
+      
+  // Update the displayed time
+  static struct tm time_copy;
+    time_copy = *tick_time;
+  model_set_time(&time_copy, units_changed);
+}
+
+void second_ticks_req_changed(bool required) {
+  if (required) {
+    tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
+  } else {
+    tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
   }
 }
 
@@ -572,6 +564,7 @@ void altitude_req_changed(bool required) {
 void update_requirements_changed(enum ModelUpdates prev_req) {
   enum ModelUpdates changes = model->update_req ^ prev_req;
   
+  if (changes & UPDATE_SECOND_TICKS) second_ticks_req_changed(model->update_req & UPDATE_SECOND_TICKS);
   if (changes & UPDATE_FLICKS) flick_req_changed(model->update_req & UPDATE_FLICKS);
   if (changes & UPDATE_TAPS) tap_req_changed(model->update_req & UPDATE_TAPS);
   #if defined(PBL_COMPASS)
@@ -593,7 +586,7 @@ static void app_init() {
   struct tm *tick_time = localtime(&temp);
   static struct tm time_copy;
   time_copy = *tick_time;
-  model_set_time(&time_copy);
+  model_set_time(&time_copy, (TimeUnits) -1);
   if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
   
   // Load health data
@@ -616,7 +609,7 @@ static void app_init() {
   app_message_open(inbox_size, outbox_size);
   
   // Register with TickTimerService
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
+  second_ticks_req_changed(model->update_req & UPDATE_SECOND_TICKS);
   
   // Register with ConnectionService
   connection_service_subscribe((ConnectionHandlers){

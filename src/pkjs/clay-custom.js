@@ -87,6 +87,9 @@ module.exports = function(minified) {
     var enableCheckboxes = enableSection.querySelectorAll('.component-toggle input');
     var i = 0;
     var siblingSection = enableSection.nextElementSibling;
+    var happyEnableDiv = clayConfig.getItemByMessageKey('cfgEnableHappy').$element[0];
+    var now = new Date();
+    var firstDayOfYear = now.getMonth() === 0 && now.getDate() === 1;
     while (siblingSection.classList.contains('section')) {
       var checkbox = enableCheckboxes[i];
       
@@ -105,6 +108,12 @@ module.exports = function(minified) {
       if (checkbox.checked) {
         siblingSection.classList.remove('hide');
       } else {
+        siblingSection.classList.add('hide');
+      }
+      
+      // Only show Happy on the first day of the year
+      if (checkbox == happyEnableDiv.querySelectorAll('input')[0] && !firstDayOfYear) {
+        happyEnableDiv.classList.add('hide');
         siblingSection.classList.add('hide');
       }
       

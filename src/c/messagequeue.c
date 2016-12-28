@@ -50,19 +50,21 @@ void message_queue_failed_handler(DictionaryIterator *iter, AppMessageResult rea
 
 void message_queue_send(Tuplet tuplets[], int tuplet_count) {
   MessageQueue* queue = malloc(sizeof(MessageQueue) + tuplet_count * sizeof(Tuplet));
-  queue->next = NULL;
-  queue->tuplet_count = tuplet_count;
-  memcpy(queue->tuplets, tuplets, tuplet_count * sizeof(Tuplet));
-  
-  if (!message_queue) {
-    message_queue = queue;
-  } else {
-    MessageQueue* list = message_queue;
-    while(list->next) list = list->next;
-    list->next = queue;
+  if (queue) {
+    queue->next = NULL;
+    queue->tuplet_count = tuplet_count;
+    memcpy(queue->tuplets, tuplets, tuplet_count * sizeof(Tuplet));
+    
+    if (!message_queue) {
+      message_queue = queue;
+    } else {
+      MessageQueue* list = message_queue;
+      while(list->next) list = list->next;
+      list->next = queue;
+    }
+    
+    message_queue_send_next();
   }
-  
-  message_queue_send_next();
 }
 
 void message_queue_send_tuplet(Tuplet tuplet) {

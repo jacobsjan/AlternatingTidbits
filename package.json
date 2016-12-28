@@ -85,7 +85,8 @@
             "cfgEnableCountdown",
             "cfgCountdownDisplay",
             "Exception",
-            "cfgEnableHappy"
+            "cfgEnableHappy",
+            "Fireworks"
         ],
         "projectType": "native",
         "resources": {

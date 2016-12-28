@@ -47,11 +47,11 @@ void model_set_error(enum ErrorCodes error) {
   }
 }
 
-void model_set_time(struct tm *time) {
+void model_set_time(struct tm *time, TimeUnits units_changed) {
   model->time = time;
   
   if (model->events.on_time_change) {
-    model->events.on_time_change();
+    model->events.on_time_change(units_changed);
   }
 }
 
