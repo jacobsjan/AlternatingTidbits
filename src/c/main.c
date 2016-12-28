@@ -55,8 +55,8 @@ static inline bool should_keep_quiet() {
 }
 
 static bool fetch_weather() {
-  // Check configuration of weather/sunrise/sunset, bluetooth connection, JS Ready and sleeping
-  if ((model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) && connection_service_peek_pebble_app_connection() && !is_asleep()) {
+  // Check configuration of weather/sunrise/sunset and sleeping
+  if ((model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) && !is_asleep()) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fetch, 1));    
     return true;
   } else {
@@ -66,8 +66,8 @@ static bool fetch_weather() {
 }
 
 static bool fetch_moonphase() {  
-  // Check configuration of moonphase, bluetooth connection, JS Ready 
-  if ((model->update_req & UPDATE_MOONPHASE) && connection_service_peek_pebble_app_connection()) {
+  // Check configuration of moonphase, bluetooth connection
+  if (model->update_req & UPDATE_MOONPHASE) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchMoonphase, 1));    
     return true;
   } else {
@@ -174,6 +174,9 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     // Save configuration
     config_save();
   }
+  
+  // Send unsent messages
+  message_queue_send_next();
 }
 
 #if defined(PBL_HEALTH)
@@ -588,7 +591,9 @@ static void app_init() {
   model->events.on_update_req_change = &update_requirements_changed;
   time_t temp = time(NULL);
   struct tm *tick_time = localtime(&temp);
-  model_set_time(tick_time);
+  static struct tm time_copy;
+  time_copy = *tick_time;
+  model_set_time(&time_copy);
   if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
   
   // Load health data
@@ -623,8 +628,7 @@ static void app_init() {
 static void app_deinit() {
   // Stop timers
   if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
-  
-  
+    
   // Unsubscribe from services
   connection_service_unsubscribe();
   tick_timer_service_unsubscribe();

@@ -466,7 +466,7 @@ module.exports = [
       },
       { 
         "type": "text", 
-        "defaultValue": "Wishes you all the best on happy occasions.",
+        "defaultValue": "Wishes you all the best on festive occasions.",
       }
     ]
   },

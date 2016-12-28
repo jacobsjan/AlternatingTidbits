@@ -110,8 +110,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->countdown_display = tuple->value->cstring[0]; 
   
   // Health
-  if(tuple && (cfgChanged = true)) config->health_number_format = tuple->value->cstring[0]; 
-  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNormalLine1);
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHealthNumbers);
+  if(tuple && (cfgChanged = true)) config->health_number_format = tuple->value->cstring[0];
   #if defined(PBL_HEALTH)
   tuple = dict_find(iter, MESSAGE_KEY_cfgHealthStick);
   if(tuple && (cfgChanged = true)) config->health_stick = tuple->value->int8; 
@@ -188,7 +188,7 @@ void config_load() {
     #endif
     config->enable_countdown = false;
     config->enable_error = false;
-    config->enable_health = true;
+    config->enable_happy = true;
     #if defined(PBL_HEALTH)
     config->enable_health = true;
     #endif
