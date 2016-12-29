@@ -80,6 +80,7 @@ struct Fireworks {
   short accel_factors[FIREWORKS_FRAMES];
   Animation* animation;
   AnimationProgress animation_progress;
+  bool flick_was_enabled;
 };
 
 struct View {
@@ -602,7 +603,7 @@ void happy_countdown_update_proc(Layer *layer, GContext *ctx) {
 void initiate_fireworks(GRect bounds, int n, int start_base) {
   // Origin
   int cx = (rand() % (bounds.size.w / 2)) + (bounds.size.w / 4);
-  int cy = (rand() % (bounds.size.h / 2)) + (bounds.size.h / 4);
+  int cy = rand() % (bounds.size.h * 3 / 4);
   view.fireworks->origin_x[n] = cx * (1 << 16); // Convert to fixed point
   view.fireworks->origin_y[n] = cy * (1 << 16);
 
@@ -653,6 +654,8 @@ void initiate_fireworks(GRect bounds, int n, int start_base) {
 }
 
 void fireworks_update_proc(Layer *layer, GContext *ctx) { 
+  if (!view.fireworks) return;
+  
   GRect bounds = layer_get_bounds(layer);  
   #if defined(PBL_BW)
   graphics_context_set_stroke_color(ctx, config->color_primary);
@@ -709,7 +712,7 @@ void fireworks_update_proc(Layer *layer, GContext *ctx) {
                 
       // Vibrate 
       if (!view.fireworks->vibrated[n] && !should_keep_quiet()) {
-        static const uint32_t const segments[] = { 50 };
+        static const uint32_t segments[] = { 50 };
         VibePattern pat = {
           .durations = segments,
           .num_segments = sizeof(segments) / sizeof(segments[0]),
@@ -752,74 +755,76 @@ static void fireworks_animation_teardown(Animation *animation) {
 void set_of_fireworks(int number_of_seconds) {
   // Based on EXPLOD.C by (C) 1989 Dennis Lo
   // Allocate fireworks memory
-  view.fireworks = (struct Fireworks*)malloc(sizeof(struct Fireworks));
-  if (!view.fireworks) return;
-  
-  // Initialize individual fireworks
-  Layer *window_layer = window_get_root_layer(view.window);
-  GRect bounds = layer_get_bounds(window_layer);
-  for (int n = 0; n < FIREWORKS_NUM; ++n) {
-    initiate_fireworks(bounds, n, 0);
-  }
-  
-  // Initialize fireworks spark scatering
-  GSize size = GSize(bounds.size.w / 4, bounds.size.h / 4);
-  for (int i = 0; i < FIREWORKS_POINTS; i++) 
-  {  
-    // Randomly select a destination that is inside the ellipse with
-    // X and Y radii of (Xsize, Ysize).
-    int dest_x, dest_y;
-    do 
-    {
-      dest_x = (rand() % (2 * size.w)) - size.w;
-      dest_y = (rand() % (2 * size.h)) - size.h;
-    } while (size.h * size.h * dest_x * dest_x + 
-             size.w * size.w * dest_y * dest_y
-             > size.h * size.h * size.w * size.w);
+  if (!view.fireworks) {
+    view.fireworks = (struct Fireworks*)malloc(sizeof(struct Fireworks));
+    if (!view.fireworks) return;
     
-    // Convert to fixed pt. Can't use shifts because they are unsigned
-    dest_x *= 1 << 16;
-    dest_y *= 1 << 16;
-
-    // accel = 2 * distance / #steps^2   (#steps is equivalent to time)
-    // vel = accel * #steps 
-    view.fireworks->vels_x[i] = (2 * dest_x) / FIREWORKS_FRAMES;
-    view.fireworks->vels_y[i] = (2 * dest_y) / FIREWORKS_FRAMES; 
-  }
-  
-  // Initialize the fireworks acceleration lookups
-  if (view.fireworks->accel_factors[FIREWORKS_FRAMES - 1] == 0) {
-    view.fireworks->accel_factors[0] = 0;
-    for (int i = 1; i < FIREWORKS_FRAMES; ++i) {
-      view.fireworks->accel_factors[i] = view.fireworks->accel_factors[i - 1] + i;
+    // Initialize individual fireworks
+    Layer *window_layer = window_get_root_layer(view.window);
+    GRect bounds = layer_get_bounds(window_layer);
+    for (int n = 0; n < FIREWORKS_NUM; ++n) {
+      initiate_fireworks(bounds, n, 0);
     }
+    
+    // Initialize fireworks spark scatering
+    GSize size = GSize(bounds.size.w / 4, bounds.size.h / 4);
+    for (int i = 0; i < FIREWORKS_POINTS; i++) 
+    {  
+      // Randomly select a destination that is inside the ellipse with
+      // X and Y radii of (Xsize, Ysize).
+      int dest_x, dest_y;
+      do 
+      {
+        dest_x = (rand() % (2 * size.w)) - size.w;
+        dest_y = (rand() % (2 * size.h)) - size.h;
+      } while (size.h * size.h * dest_x * dest_x + 
+               size.w * size.w * dest_y * dest_y
+               > size.h * size.h * size.w * size.w);
+      
+      // Convert to fixed pt. Can't use shifts because they are unsigned
+      dest_x *= 1 << 16;
+      dest_y *= 1 << 16;
+  
+      // accel = 2 * distance / #steps^2   (#steps is equivalent to time)
+      // vel = accel * #steps 
+      view.fireworks->vels_x[i] = (2 * dest_x) / FIREWORKS_FRAMES;
+      view.fireworks->vels_y[i] = (2 * dest_y) / FIREWORKS_FRAMES; 
+    }
+    
+    // Initialize the fireworks acceleration lookups
+    if (view.fireworks->accel_factors[FIREWORKS_FRAMES - 1] == 0) {
+      view.fireworks->accel_factors[0] = 0;
+      for (int i = 1; i < FIREWORKS_FRAMES; ++i) {
+        view.fireworks->accel_factors[i] = view.fireworks->accel_factors[i - 1] + i;
+      }
+    }
+    
+    // Create layer
+    if (!view.layers.fireworks) {
+      view.layers.fireworks = layer_create(bounds);
+      layer_add_child(window_layer, view.layers.fireworks);
+    }
+    
+    // Set the update_proc for fireworks layer, possibly switching from showing countdown
+    layer_set_update_proc(view.layers.fireworks, fireworks_update_proc);
+    
+    // Animate the fireworks
+    if (!view.fireworks->animation) {
+      view.fireworks->animation_progress = 0;
+      view.fireworks->animation = animation_create();
+      animation_set_duration(view.fireworks->animation, number_of_seconds * 1000); 
+      animation_set_curve(view.fireworks->animation, AnimationCurveLinear);
+      static const AnimationImplementation implementation = {
+        .update = fireworks_animation_update,
+        .teardown = fireworks_animation_teardown
+      };
+      animation_set_implementation(view.fireworks->animation, &implementation);
+      animation_schedule(view.fireworks->animation);
+    } 
+    
+    // Send fireworks to analytics 
+    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fireworks, 1)); 
   }
-  
-  // Create layer
-  if (!view.layers.fireworks) {
-    view.layers.fireworks = layer_create(bounds);
-    layer_add_child(window_layer, view.layers.fireworks);
-  }
-  
-  // Set the update_proc for fireworks layer, possibly switching from showing countdown
-  layer_set_update_proc(view.layers.fireworks, fireworks_update_proc);
-  
-  // Animate the fireworks
-  if (!view.fireworks->animation) {
-    view.fireworks->animation_progress = 0;
-    view.fireworks->animation = animation_create();
-    animation_set_duration(view.fireworks->animation, number_of_seconds * 1000); 
-    animation_set_curve(view.fireworks->animation, AnimationCurveLinear);
-    static const AnimationImplementation implementation = {
-      .update = fireworks_animation_update,
-      .teardown = fireworks_animation_teardown
-    };
-    animation_set_implementation(view.fireworks->animation, &implementation);
-    animation_schedule(view.fireworks->animation);
-  } 
-  
-  // Send fireworks to analytics 
-  message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fireworks, 0)); 
 }
 
 #if defined(PBL_HEALTH)
@@ -1339,25 +1344,24 @@ Layer* alternating_layers_destroy(Layer* layer) {
 }
 
 void evaluate_happiness() {
-  if (config->enable_happy) {
-    time_t diff = view.fireworks_time - time(NULL);
-    
+  if (config->enable_happy) {    
     // Check layer
     if (!view.layers.happy) {
       // The happy layer does not yet exist, create it if needed
-      if (diff <= 0 && diff > -SECONDS_PER_DAY) {
+      if (model->time->tm_mday == 1 && model->time->tm_mon == 0) { // First day of the year
         view.layers.happy = alternating_layers_create(happy_update_proc, ICON_HAPPY);
         alternating_layers_show_layer(view.layers.happy);
       } 
     } else {
       // Remove the happy layer if needed if needed
-      if (diff > 0 || diff <= -SECONDS_PER_DAY) {
+      if (model->time->tm_mday != 1 || model->time->tm_mon != 0) { // First day of the year
         alternating_layers_remove(view.layers.happy);
         view.layers.happy = NULL;
       } 
     }
     
     // Check countdown & fireworks
+    time_t diff = view.fireworks_time - time(NULL);
     if (diff <= SECONDS_PER_MINUTE && diff > 0) {
       // Less than a minute to go till fireworks
       // Ask for ticks every second 
@@ -1373,14 +1377,12 @@ void evaluate_happiness() {
           layer_add_child(window_layer, view.layers.fireworks);
         }
         
+        // Suspend switcher
+        model_remove_update_req(UPDATE_FLICKS);
+        
         // Vibrate 
         if (!should_keep_quiet()) {
-          static uint32_t segments[] = { 200 };
-          VibePattern pat = {
-            .durations = segments,
-            .num_segments = sizeof(segments) / sizeof(segments[0]),
-          };
-          vibes_enqueue_custom_pattern(pat);
+          vibes_short_pulse();
         }
         
         // Update countdown
@@ -1389,6 +1391,9 @@ void evaluate_happiness() {
     } else if (diff <= 0 && diff > -FIREWORKS_TOTAL_DURATION){
       // Reset ticks to every minute
       model_remove_update_req(UPDATE_SECOND_TICKS);
+      
+      // Re-activate switcher
+      if (config->alternate_mode != 'M') model_add_update_req(UPDATE_FLICKS);
       
       // Show fireworks 
       set_of_fireworks(FIREWORKS_TOTAL_DURATION - diff);
@@ -1853,22 +1858,18 @@ void view_init() {
   if (config->enable_timezone) view.layers.timezone = alternating_layers_create(timezone_update_proc, ICON_TIMEZONE);
   
   // Calculate time of next fireworks
-  struct tm start_of_year = *model->time;/*
+  struct tm start_of_year = *model->time;
   start_of_year.tm_sec = 0;
   start_of_year.tm_min = 0;
   start_of_year.tm_hour = 0;
   start_of_year.tm_mday = 1;
   start_of_year.tm_mon = 0;
-  start_of_year.tm_year += 1; // Next year*/
-  
-  start_of_year.tm_sec = 0;
-  start_of_year.tm_min = 35;
-  start_of_year.tm_hour = 23;
+  start_of_year.tm_year += 1; // Next year
   
   view.fireworks_time = mktime(&start_of_year);
   
   // Update time text
-  time_changed((TimeUnits)-1);
+  time_changed((TimeUnits)~0);
 }
 
 void view_deinit() {  

@@ -24,10 +24,12 @@ static char* ICON_COUNTDOWN_FROM_DATE = "\uf153";
 
 static char* ICON_HAPPY = "\uf283";
 
+#if defined(PBL_HEALTH)
 static char* ICON_STEP = "\uf2ab";
 static char* ICON_WALK = "\uf2b1";
 static char* ICON_RUN = "\uf2ae";
 static char* ICON_SLEEP = "\uf2af";
+#endif
 
 static char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
 static char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)

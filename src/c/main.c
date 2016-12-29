@@ -586,7 +586,7 @@ static void app_init() {
   struct tm *tick_time = localtime(&temp);
   static struct tm time_copy;
   time_copy = *tick_time;
-  model_set_time(&time_copy, (TimeUnits) -1);
+  model_set_time(&time_copy, (TimeUnits)~0);
   if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
   
   // Load health data
@@ -621,14 +621,16 @@ static void app_init() {
 static void app_deinit() {
   // Stop timers
   if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
-    
+  
   // Unsubscribe from services
   connection_service_unsubscribe();
-  tick_timer_service_unsubscribe();
   app_message_deregister_callbacks();
   
   // De-initialize view
   view_deinit();
+  
+  // Unsubscribe from tick service, view_deinit() will register to minutes
+  tick_timer_service_unsubscribe();
   
   // Clear messages left in the message queue
   message_queue_deinit();

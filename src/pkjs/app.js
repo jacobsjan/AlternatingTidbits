@@ -144,10 +144,10 @@ function nack(e) {
 }
 
 function pingAnalytics() {
-  // Ping maximally once daily
+  // Ping maximally every hour
   var lastPing = window.localStorage.getItem('analyticsLastPing');
   var mSinceLastPing = Math.floor((new Date() - new Date(lastPing)) / (60 * 1000));
-  if (lastPing === undefined || mSinceLastPing >= 60 * 24) {
+  if (lastPing === undefined || mSinceLastPing >= 60) {
     console.log("Pinging, last analytics ping was " + mSinceLastPing + "m ago.");
     analytics.trackEvent('watchface', 'Alive');
     window.localStorage.setItem('analyticsLastPing', new Date());
@@ -170,7 +170,7 @@ Pebble.addEventListener('ready', function(e) {
   }
   
   // Initialize analytics
-  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', '1.3');
+  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', '1.4');
 
   // Signal analytics
   pingAnalytics();
@@ -209,7 +209,7 @@ function fetchAltitude() {
       var currentAltitude = position.coords.altitude;
       
       // Validate that the altitude has changed before sending it to the watch
-      if (Math.abs(currentAltitude - lastSubmittedAltitude) > 1) { //position.coords.altitudeAccuracy / 2) {
+      if (Math.abs(currentAltitude - lastSubmittedAltitude) > position.coords.altitudeAccuracy) {
         lastSubmittedAltitude = currentAltitude;
         sendMessage({
           'Altitude': Math.round(currentAltitude)
