@@ -2,6 +2,7 @@
 #include <limits.h>
 
 #include "config.h"
+#include "crashdetection.h"
 #include "model.h"
 #include "utils.h"
 #include "view.h"
@@ -74,6 +75,17 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     
     // Subscribe to altitude
     if (model->update_req & UPDATE_ALTITUDE) altitude_req_changed(true);
+        
+    // Signal that a heartrate sensor is available
+    #if defined(POSSIBLE_HR)
+    HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+    if (hr & HealthServiceAccessibilityMaskAvailable) {
+      HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
+      if(val > 0) {
+        message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_HeartrateAvailable, 1));
+      }
+    }    
+    #endif
   }
   
   // Weather
@@ -84,6 +96,7 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     
     // Weather fetch was succesfull, reset fetch countdown
     weather_fetch_countdown = config->weather_refresh;
+    
   }
   tuple = dict_find(iter, MESSAGE_KEY_Condition);
   if(tuple && (wtrChanged = true)) model_set_weather_condition(tuple->value->int32);
@@ -477,7 +490,11 @@ void flick_req_changed(bool required) {
 
 void accel_handler(AccelData *data, uint32_t num_samples) {
   // Check whether tap events are still required
-  if (!(model->update_req & UPDATE_TAPS)) APP_LOG(APP_LOG_LEVEL_WARNING, "Accel handling while no longer required"); //return;
+  if (!(model->update_req & UPDATE_TAPS)) 
+  { 
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Accel handling while no longer required"); 
+    return; 
+  }
   
   // Detect minor taps
   bool also_calm = false;
@@ -515,10 +532,18 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
   }
 }
 
+void accel_unsubscribe_leave_zone_callback(void *data) {  
+  crash_leave_zone(CRASH_ZONE_ACCEL_UNSUBSCRIBE);
+  accel_unsubscribe_timer = NULL;
+}
+
 void accel_unsubscribe_callback(void *data) {  
   //accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
+  crash_enter_zone(CRASH_ZONE_ACCEL_UNSUBSCRIBE);
   accel_data_service_unsubscribe(); 
   accel_unsubscribe_timer = NULL;
+  
+  accel_unsubscribe_timer = app_timer_register(0, accel_unsubscribe_leave_zone_callback, NULL);
 }
 
 void tap_req_changed(bool required) {
@@ -647,50 +672,6 @@ static void app_deinit() {
   persist_write_int(STORAGE_ALTITUDE_CLIMB, altitude_climb);
   persist_write_int(STORAGE_ALTITUDE_DESCEND, altitude_descend); 
   #endif
-}
-
-static void crash_detection_init() {
-  // Read previous crash info
-  #define MAX_TIMESTAMPS (PERSIST_DATA_MAX_LENGTH / sizeof(time_t))
-  uint num_crashes = persist_exists(STORAGE_CRASH_NUM) ? persist_read_int(STORAGE_CRASH_NUM) : 0;
-  time_t crash_timestamps[MAX_TIMESTAMPS] = { 0 };
-  if (persist_exists(STORAGE_CRASH_TIMESTAMPS)) persist_read_data(STORAGE_CRASH_TIMESTAMPS, &crash_timestamps, sizeof(crash_timestamps));   
-    
-  // Detect new restart after crash
-  if (persist_exists(STORAGE_CRASH_DETECTOR)) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Restarted after crash!");
-    
-    // Record this crash
-    time_t now = time(NULL);
-    crash_timestamps[num_crashes % MAX_TIMESTAMPS] = now;
-    ++num_crashes;
-    
-    // Save crash info
-    persist_write_int(STORAGE_CRASH_NUM, num_crashes);
-    persist_write_data(STORAGE_CRASH_TIMESTAMPS, crash_timestamps, sizeof(crash_timestamps));
-    
-    // Send crash to analytics 
-    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Exception, num_crashes));  
-  }
-  
-  // Print crash history
-  if (num_crashes > 0) {
-    APP_LOG(APP_LOG_LEVEL_INFO, "%d Crashes detected. Restarts at:", num_crashes);
-    char timestamp[30];
-    for (uint i = 0; i < num_crashes % MAX_TIMESTAMPS; ++i) {
-      const struct tm *crash_time = localtime(&crash_timestamps[i]);
-      strftime(timestamp, sizeof(timestamp) / sizeof(char), "%F %T", crash_time);
-      APP_LOG(APP_LOG_LEVEL_INFO, "[%s]", timestamp);
-    }
-  }
-  
-  // Mark app as running to enable crash detection
-  persist_write_bool(STORAGE_CRASH_DETECTOR, true);
-}
-
-static void crash_detection_deinit() {
-  // Mark no crash occured
-  persist_delete(STORAGE_CRASH_DETECTOR);
 }
 
 int main(void) {

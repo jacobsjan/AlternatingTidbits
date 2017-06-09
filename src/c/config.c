@@ -61,6 +61,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   #if defined(PBL_HEALTH) 
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHealth);
   if(tuple && (cfgChanged = true)) config->enable_health = tuple->value->int8;
+  #endif  
+  #if defined(POSSIBLE_HR)
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHeartrate);
+  if(tuple && (cfgChanged = true)) config->enable_heartrate = tuple->value->int8;
   #endif
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableMoonphase);
   if(tuple && (cfgChanged = true)) config->enable_moonphase = tuple->value->int8;
@@ -191,6 +195,9 @@ void config_load() {
     config->enable_happy = true;
     #if defined(PBL_HEALTH)
     config->enable_health = true;
+    #endif
+    #if defined(POSSIBLE_HR)
+    config->enable_heartrate = true;
     #endif
     config->enable_moonphase = true;
     config->enable_sun = true;

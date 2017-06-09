@@ -31,6 +31,10 @@ static char* ICON_RUN = "\uf2ae";
 static char* ICON_SLEEP = "\uf2af";
 #endif
 
+#if defined(POSSIBLE_HR)
+static char* ICON_HEARTRATE = "\uf2b5";
+#endif
+
 static char* ICON_SUNRISE = "\uf051"; // wi-sunrise (Weather Icons)
 static char* ICON_SUNSET = "\uf052"; // wi-sunset (Weather Icons)
 

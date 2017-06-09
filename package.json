@@ -86,7 +86,9 @@
             "cfgCountdownDisplay",
             "Exception",
             "cfgEnableHappy",
-            "Fireworks"
+            "Fireworks",
+            "HeartrateAvailable",
+            "cfgEnableHeartrate"
         ],
         "projectType": "native",
         "resources": {
@@ -139,5 +141,5 @@
             "watchface": true
         }
     },
-    "version": "1.4.0"
+    "version": "1.5.0"
 }

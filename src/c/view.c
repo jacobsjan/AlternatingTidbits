@@ -51,6 +51,9 @@ struct Layers {
   #if defined(PBL_HEALTH)
   Layer *health;
   #endif
+  #if defined(POSSIBLE_HR)
+  Layer *heartrate;
+  #endif
   Layer *moonphase;
   Layer *sunrise_sunset;
   Layer *weather;
@@ -360,7 +363,7 @@ static long ymd_to_days (int yr, int mo, int day) {
 
 static void countdown_update_proc(Layer *layer, GContext *ctx) {
   // As iOS javascript seems to disagree with Pebble on DST for further away dates
-  // and mktime seems to completely fail on the Pebble we're doing all countdown
+  // and mktime seems to completely fail on the Pebble so we're doing all countdown
   // calculations in local time.
   
   // Convert target and now to tm formats
@@ -381,7 +384,11 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   target_tm.tm_sec = 0;
   
   // Convert target and now to comparable formats
-  long target_comp = config->countdown_date * 10000L + config->countdown_time;
+  long target_comp = target_tm.tm_year + 1900;
+  target_comp = target_comp * 100L + target_tm.tm_mon + 1;
+  target_comp = target_comp * 100L + target_tm.tm_mday;
+  target_comp = target_comp * 100L + target_tm.tm_hour;
+  target_comp = target_comp * 100L + target_tm.tm_min;
   long now_comp = now_tm.tm_year + 1900;
   now_comp = now_comp * 100L + now_tm.tm_mon + 1;
   now_comp = now_comp * 100L + now_tm.tm_mday;
@@ -960,6 +967,23 @@ char** health_generate_texts(enum HealthIndicator indicator) {
       result[2] = alloc_print_d("%d", metric);
       result[3] = alloc_print_s(config->altitude_unit == 'M' ? "m" : "ft");
       break;
+    #if defined(POSSIBLE_HR)
+    case HEALTH_HEARTRATE:    
+      metric = 0;    
+      HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+      if (hr & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        if(val > 0) {
+          metric = val;
+        }
+      }
+    
+      result[0] = alloc_print_d("%d", metric);
+      result[1] = alloc_print_s("bpm");
+      result[2] = NULL;
+      result[3] = NULL;
+      break;
+    #endif
   }
   return result;
 }
@@ -1030,6 +1054,23 @@ void health_update_proc(Layer *layer, GContext *ctx) {
     free(bottom_texts[3]);
     free(bottom_texts);
   }
+}
+#endif
+
+#if defined(POSSIBLE_HR)
+void heartrate_update_proc(Layer *layer, GContext *ctx) {
+  char heartrate[4];
+  HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+  if (hr & HealthServiceAccessibilityMaskAvailable) {
+    HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
+    if(val > 0) {
+      snprintf(heartrate, sizeof(heartrate), "%d", (int)val);
+    }
+  }
+  
+  // Draw
+  char *texts[] = { heartrate, "bpm"}; 
+  draw_centered(layer, ctx, ICON_HEARTRATE, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
 }
 #endif
 
@@ -1854,6 +1895,14 @@ void view_init() {
   evaluate_happiness(); 
   #if defined(PBL_HEALTH)
   if (config->enable_health) activity_changed();
+  #endif
+  #if defined(POSSIBLE_HR)
+  if (config->enable_heartrate) {
+    HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+    if (hr & HealthServiceAccessibilityMaskAvailable) {
+      view.layers.heartrate = alternating_layers_create(heartrate_update_proc, ICON_HEARTRATE);
+    }
+  }
   #endif
   if (config->enable_timezone) view.layers.timezone = alternating_layers_create(timezone_update_proc, ICON_TIMEZONE);
   

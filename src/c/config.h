@@ -27,6 +27,9 @@ struct Config {
   #if defined(PBL_HEALTH)
   bool enable_health;
   #endif
+  #if defined(POSSIBLE_HR)
+  bool enable_heartrate;
+  #endif
   bool enable_moonphase;
   bool enable_sun;
   bool enable_weather;

@@ -50,40 +50,50 @@ void model_set_error(enum ErrorCodes error) {
 void model_set_time(struct tm *time, TimeUnits units_changed) {
   model->time = time;
   
-  if (model->events.on_time_change) {
-    model->events.on_time_change(units_changed);
+  if ((units_changed & ~SECOND_UNIT) || (model->update_req & UPDATE_SECOND_TICKS)) {
+    if (model->events.on_time_change) {
+      model->events.on_time_change(units_changed);
+    }
   }
 }
 
 void model_set_weather_condition(enum WeatherCondition condition) {
   model->weather_condition = condition;
     
-  if (model->events.on_weather_condition_change) {
-    model->events.on_weather_condition_change();
+  if (model->update_req & UPDATE_WEATHER) {
+    if (model->events.on_weather_condition_change) {
+      model->events.on_weather_condition_change();
+    }
   }
 }
 
 void model_set_weather_temperature(int temperature) {
   model->weather_temperature = temperature;
     
-  if (model->events.on_weather_temperature_change) {
-    model->events.on_weather_temperature_change();
+  if (model->update_req & UPDATE_WEATHER) {
+    if (model->events.on_weather_temperature_change) {
+      model->events.on_weather_temperature_change();
+    }
   }
 }
 
 void model_set_sunrise(int sunrise) {
   model->sunrise = sunrise;
     
-  if (model->events.on_sunrise_change) {
-    model->events.on_sunrise_change();
+  if (model->update_req & UPDATE_SUN) {
+    if (model->events.on_sunrise_change) {
+      model->events.on_sunrise_change();
+    }
   }
 }
 
 void model_set_sunset(int sunset) {
   model->sunset = sunset;
     
-  if (model->events.on_sunset_change) {
-    model->events.on_sunset_change();
+  if (model->update_req & UPDATE_SUN) {
+    if (model->events.on_sunset_change) {
+      model->events.on_sunset_change();
+    }
   }
 }
 
@@ -92,8 +102,10 @@ void model_set_battery(uint8_t charge, bool charging, bool plugged) {
   model->battery_charging = charging;
   model->battery_plugged = plugged;
     
-  if (model->events.on_battery_change) {
-    model->events.on_battery_change();
+  if (model->update_req & UPDATE_BATTERY) {
+    if (model->events.on_battery_change) {
+      model->events.on_battery_change();
+    }
   }
 }
 
@@ -101,8 +113,10 @@ void model_set_battery(uint8_t charge, bool charging, bool plugged) {
 void model_set_compass_heading(CompassHeadingData compass_heading) {
   model->compass_heading = compass_heading;
     
-  if (model->events.on_compass_heading_change) {
-    model->events.on_compass_heading_change();
+  if (model->update_req & UPDATE_COMPASS) {
+    if (model->events.on_compass_heading_change) {
+      model->events.on_compass_heading_change();
+    }
   }
 }
 #endif
@@ -111,8 +125,10 @@ void model_set_compass_heading(CompassHeadingData compass_heading) {
 void model_set_activity(enum Activities activity) {
   model->activity = activity;
     
-  if (model->events.on_activity_change) {
-    model->events.on_activity_change();
+  if (model->update_req & UPDATE_HEALTH) {
+    if (model->events.on_activity_change) {
+      model->events.on_activity_change();
+    }
   }
 }
 
@@ -124,8 +140,10 @@ void model_set_activity_counters(int calories, int duration, int distance, int s
   model->activity_climb = climb;
   model->activity_descend = descend;
     
-  if (model->events.on_activity_counters_change) {
-    model->events.on_activity_counters_change();
+  if (model->update_req & UPDATE_HEALTH) {
+    if (model->events.on_activity_counters_change) {
+      model->events.on_activity_counters_change();
+    }
   }
 }
 #endif
@@ -134,27 +152,35 @@ void model_set_moon(int moonphase, int moonillumination) {
   model->moonphase = moonphase;
   model->moonillumination = moonillumination;
     
-  if (model->events.on_moonphase_change) {
-    model->events.on_moonphase_change();
+  if (model->update_req & UPDATE_MOONPHASE) {
+    if (model->events.on_moonphase_change) {
+      model->events.on_moonphase_change();
+    }
   }
 }
 
 void model_set_altitude(int altitude) {
   model->altitude = altitude;
     
-  if (model->events.on_altitude_change) {
-    model->events.on_altitude_change();
+  if (model->update_req & UPDATE_ALTITUDE) {
+    if (model->events.on_altitude_change) {
+      model->events.on_altitude_change();
+    }
   }
 }
 
 void model_signal_flick() {
-  if (model->events.on_flick) {
-    model->events.on_flick();
+  if (model->update_req & UPDATE_FLICKS) {
+    if (model->events.on_flick) {
+      model->events.on_flick();
+    }
   }
 }
 
 void model_signal_tap() {
-  if (model->events.on_tap) {
-    model->events.on_tap();
+  if (model->update_req & UPDATE_TAPS) {
+    if (model->events.on_tap) {
+      model->events.on_tap();
+    }
   }
 }

@@ -12,6 +12,7 @@ var Analytics = require('./libs/analytics.js');
 var keys = require('message_keys');
 var lastSubmittedAltitude = Number.MIN_VALUE;
 var altitudeSubscription = false;
+var heartrateAvailable = false;
 var analytics = null;
 
 function sendMessage(data) {
@@ -46,9 +47,12 @@ try {
 
 // Make the watchface configurable using Clay
 var Clay = require('pebble-clay');
-// Load our Clay configuration file
+
+// Load our Clay configuration files
 var clayConfig = require('./config');
+var clayConfigHR = require('./config-hr');
 var customClay = require('./clay-custom');
+
 // Initialize Clay
 var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false } );
 clay.registerComponent(require('./clay-component-masterkey'));
@@ -56,6 +60,12 @@ clay.registerComponent(require('./clay-component-dateformat'));
 clay.registerComponent(require('./clay-component-timezone'));
 
 Pebble.addEventListener('showConfiguration', function(e) {
+  if (heartrateAvailable) {
+    clay.config = clayConfigHR;
+  } else {
+    clay.config = clayConfig;
+  }
+  
   Pebble.openURL(clay.generateUrl());
 });
 
@@ -170,7 +180,7 @@ Pebble.addEventListener('ready', function(e) {
   }
   
   // Initialize analytics
-  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', '1.4');
+  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', '1.5');
 
   // Signal analytics
   pingAnalytics();
@@ -190,8 +200,10 @@ Pebble.addEventListener('appmessage', function(e) {
     } else if (e.payload.UnsubscribeAltitude) {
       window.clearInterval(altitudeSubscription);
       lastSubmittedAltitude = Number.MIN_VALUE;
+    } else if (e.payload.HeartrateAvailable) {
+      heartrateAvailable = true;
     } else if (e.payload.Exception) {
-      analytics.trackException("C crash " + e.payload.Exception + ".");
+      analytics.trackException("C crash in zone " + e.payload.Exception + ".");
     } else if (e.payload.Fireworks) {
       analytics.trackEvent('watchface', 'Fireworks');
     }
