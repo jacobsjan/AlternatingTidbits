@@ -51,7 +51,7 @@ struct Layers {
   #if defined(PBL_HEALTH)
   Layer *health;
   #endif
-  #if defined(POSSIBLE_HR)
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
   Layer *heartrate;
   #endif
   Layer *moonphase;
@@ -62,6 +62,7 @@ struct Layers {
 struct Fonts {
   GFont primary;
   GFont secondary;
+  GFont accent;
   GFont icons;
   GFont icons_small;
   GFont icons_large;
@@ -90,6 +91,9 @@ struct View {
   Window *window;
   struct Layers layers;
   struct Fonts fonts;
+  
+  // Is the primary font system or custom?
+  bool primary_font_custom;
   
   // Alternating layer info
   struct Layer *alt_layers[(sizeof(struct Layers) / sizeof(Layer*)) - 7]; // Very nasty trick to avoid forgetting to increase the array size
@@ -137,7 +141,7 @@ GSize calculate_total_size(GRect bounds, int text_count, char *texts[]) {
   
   for (int i = 0; i < text_count; ++i) {
     if (texts[i]) {
-      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.secondary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], i % 2 == 0 ? view.fonts.secondary : view.fonts.accent, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
       result.w += text_size.w;
       result.h = text_size.h > result.h ? text_size.h : result.h;
     }
@@ -150,11 +154,12 @@ void draw_alternating_text(GContext *ctx, GRect bounds, int text_count, char *te
   for (int i = 0; i < text_count; ++i) {
     if (texts[i]) {
       // Draw the text
+      GFont font = i % 2 == 0 ? view.fonts.secondary : view.fonts.accent;
       graphics_context_set_text_color(ctx, i % 2 == 0 ? config->color_secondary : config->color_accent); // Alternate color
-      graphics_draw_text(ctx, texts[i], view.fonts.secondary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+      graphics_draw_text(ctx, texts[i], font, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       
       // Shrink bounds to the right
-      GSize text_size = graphics_text_layout_get_content_size(texts[i], view.fonts.secondary, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], font, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
       bounds.origin.x += text_size.w;
       bounds.size.w -= text_size.w;
     }
@@ -361,6 +366,25 @@ static long ymd_to_days (int yr, int mo, int day) {
   return scalar;
 }
 
+int determine_sign(char** sign_text, int remainder, int large_unit, int small_unit) {
+  if (remainder > large_unit - small_unit / 2) {
+    *sign_text = "≈";
+    return 1;
+  } else if (remainder > large_unit / 2) {
+    *sign_text = "<";
+    return 1;
+  } else if (remainder > small_unit / 2) {
+    *sign_text = ">";
+    return 0;
+  } else if (remainder > 0) {
+    *sign_text = "≈";
+    return 0;
+  } else {
+    *sign_text = NULL;
+    return 0;
+  }
+}
+
 static void countdown_update_proc(Layer *layer, GContext *ctx) {
   // As iOS javascript seems to disagree with Pebble on DST for further away dates
   // and mktime seems to completely fail on the Pebble so we're doing all countdown
@@ -431,7 +455,7 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   received = min_tm.tm_hour + borrow > max_tm.tm_hour ? 24 : 0;
   int hour_diff = max_tm.tm_hour + received - min_tm.tm_hour - borrow;
   borrow = received > 0 ? 1 : 0;
-  received = min_tm.tm_mday + borrow > max_tm.tm_mday ? days_per_month((max_tm.tm_mon - 1 + 12) % 12, max_tm.tm_year - (max_tm.tm_mon == 0 ? 1 : 0)) : 0;
+  received = min_tm.tm_mday + borrow > max_tm.tm_mday ? days_per_month(max_tm.tm_mon, max_tm.tm_year) : 0; // days_per_month((max_tm.tm_mon - 1 + 12) % 12, max_tm.tm_year - (max_tm.tm_mon == 0 ? 1 : 0)) : 0;
   int day_diff = max_tm.tm_mday + received - min_tm.tm_mday - borrow;
   borrow = received > 0 ? 1 : 0;
   received = min_tm.tm_mon + borrow > max_tm.tm_mon ? 12 : 0;
@@ -504,34 +528,50 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   } else {
     // Display incremental detail
     int count;
+    int remainder;
     char* unit;
+    char* sign_text;
     char count_text[6];
-    if (year_diff > 3 ) {
+    if (year_diff > 3 || (year_diff == 3 && (month_diff > 0 || day_diff > 0 || hour_diff > 0 || min_diff > 0))) {
       count = year_diff;
+      remainder = ymd_to_days(max_tm.tm_year - year_diff + 1900, max_tm.tm_mon + 1, max_tm.tm_mday) - ymd_to_days(min_tm.tm_year + 1900, min_tm.tm_mon + 1, min_tm.tm_mday);
+      remainder *= SECONDS_PER_DAY;
+      remainder += hour_diff * SECONDS_PER_HOUR + min_diff * SECONDS_PER_MINUTE;
+      count += determine_sign(&sign_text, remainder, (is_leap(max_tm.tm_year + 1900) ? 366 : 365) * SECONDS_PER_DAY, SECONDS_PER_DAY);
       unit = " years ";
-    } else if (month_diff > 3) {
-      count = month_diff;
+    } else if (year_diff * 12 + month_diff > 3 || (month_diff == 3 && (day_diff > 0 || hour_diff > 0 || min_diff > 0))) {
+      count = year_diff * 12 + month_diff;
+      remainder = day_diff * SECONDS_PER_DAY + hour_diff * SECONDS_PER_HOUR + min_diff * SECONDS_PER_MINUTE;
+      count += determine_sign(&sign_text, remainder, days_per_month(max_tm.tm_mon, max_tm.tm_year) * SECONDS_PER_DAY, SECONDS_PER_DAY);
       unit = " months ";
     } else if (diff > 3 * 7 * SECONDS_PER_DAY) {
       count = diff / (7 * SECONDS_PER_DAY);
+      remainder = diff % (7 * SECONDS_PER_DAY);
+      count += determine_sign(&sign_text, remainder, 7 * SECONDS_PER_DAY, SECONDS_PER_DAY);
       unit = " weeks ";
     } else if (diff > 3 * SECONDS_PER_DAY || config->countdown_to == 'D') {
       count = diff / SECONDS_PER_DAY;
+      remainder = diff % SECONDS_PER_DAY;
+      count += determine_sign(&sign_text, remainder, SECONDS_PER_DAY, SECONDS_PER_HOUR);
       unit = " days ";
     } else if (diff > 3 * SECONDS_PER_HOUR) {
       count = diff / SECONDS_PER_HOUR;
+      remainder = diff % SECONDS_PER_HOUR;
+      count += determine_sign(&sign_text, remainder, SECONDS_PER_HOUR, SECONDS_PER_MINUTE);
       unit = " hours ";
     } else if (diff > SECONDS_PER_MINUTE) {
       count = diff / SECONDS_PER_MINUTE;
+      sign_text = NULL;
       unit = " minutes ";
     } else {
       count = 1;
+      sign_text = NULL;
       unit = " minute ";   
     }    
     snprintf(count_text, sizeof(count_text), "%d", count);    
   
     // Draw
-    char *bottom_texts[] = { pre_text, count_text, unit, NULL, post_text };
+    char *bottom_texts[] = { pre_text, NULL, sign_text, count_text, unit, NULL, post_text };
     draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   }
 }
@@ -967,15 +1007,11 @@ char** health_generate_texts(enum HealthIndicator indicator) {
       result[2] = alloc_print_d("%d", metric);
       result[3] = alloc_print_s(config->altitude_unit == 'M' ? "m" : "ft");
       break;
-    #if defined(POSSIBLE_HR)
+    #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
     case HEALTH_HEARTRATE:    
       metric = 0;    
-      HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-      if (hr & HealthServiceAccessibilityMaskAvailable) {
-        HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        if(val > 0) {
-          metric = val;
-        }
+      if (is_heartrate_available()) {
+        metric = (int)health_service_peek_current_value(HealthMetricHeartRateBPM);
       }
     
       result[0] = alloc_print_d("%d", metric);
@@ -1057,20 +1093,32 @@ void health_update_proc(Layer *layer, GContext *ctx) {
 }
 #endif
 
-#if defined(POSSIBLE_HR)
+#if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
 void heartrate_update_proc(Layer *layer, GContext *ctx) {
   char heartrate[4];
-  HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-  if (hr & HealthServiceAccessibilityMaskAvailable) {
-    HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    if(val > 0) {
-      snprintf(heartrate, sizeof(heartrate), "%d", (int)val);
+  HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
+  snprintf(heartrate, sizeof(heartrate), "%d", (int)val);
+  
+  // Determine heartrate zone
+  char *zone;
+  if (config->heartrate_zone) {
+    if (val > 155) {
+      zone = "Performance";
+    } else if (val > 128) {
+      zone = "Endurance";
+    } else if (val >= 92) {
+      zone = "Fat Burn";
+    } else {
+      zone = NULL;
     }
+  } else {
+    zone = NULL;
   }
   
   // Draw
-  char *texts[] = { heartrate, "bpm"}; 
-  draw_centered(layer, ctx, ICON_HEARTRATE, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
+  char *middle_texts[] = { zone }; 
+  char *bottom_texts[] = { heartrate, "bpm"}; 
+  draw_multi_centered(layer, ctx, ICON_HEARTRATE, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
 }
 #endif
 
@@ -1750,15 +1798,57 @@ void main_window_load(Window *window) {
   GRect bounds = layer_get_bounds(window_layer);
 
   // Create GFonts
-  view.fonts.primary = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_SPARKLER_54));
-  view.fonts.secondary = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); 
+  view.primary_font_custom = false;
+  switch (config->font_large) {
+    case 'A':
+    default:
+      view.fonts.primary = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_SPARKLER_54));
+      view.primary_font_custom = true;
+      break;
+    case 'B':
+      view.fonts.primary = fonts_get_system_font(FONT_KEY_BITHAM_42_LIGHT);
+      break;
+    case 'C':
+      view.fonts.primary = fonts_get_system_font(FONT_KEY_BITHAM_42_MEDIUM_NUMBERS);
+      break;
+    case 'D':
+      view.fonts.primary = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
+      break;
+    case 'E':
+      view.fonts.primary = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS); 
+      break;
+    case 'F':
+      view.fonts.primary = fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49);
+      break;
+  }   
+  switch (config->font_small) {
+    case 'B':
+    default:
+      view.fonts.secondary = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+      view.fonts.accent = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); 
+      break;
+    case 'N':
+      view.fonts.secondary = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+      view.fonts.accent = fonts_get_system_font(FONT_KEY_GOTHIC_24); 
+      break;
+    case 'A':
+      view.fonts.secondary = fonts_get_system_font(FONT_KEY_GOTHIC_24);
+      view.fonts.accent = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); 
+      break;
+    case 'T':
+      view.fonts.secondary = fonts_get_system_font(FONT_KEY_GOTHIC_24);
+      view.fonts.accent = fonts_get_system_font(FONT_KEY_GOTHIC_24); 
+      break;
+  }   
   view.fonts.icons = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_30));
   view.fonts.icons_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_16));
   view.fonts.icons_large = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_56));
 
   // Create and add the hour layer
+  int text_height = graphics_text_layout_get_content_size("1", view.fonts.primary, GRect(0, 0, 60, 60), GTextOverflowModeWordWrap, GTextAlignmentLeft).h;
+  int v_offset = (54 - text_height) / 2;
   view.layers.hour = text_layer_create(
-      GRect(0, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w / 2 - 4, 60));
+      GRect(0, PBL_IF_ROUND_ELSE(58, 52) + v_offset, bounds.size.w / 2 - 4, 60));
   text_layer_set_background_color(view.layers.hour, GColorClear);
   text_layer_set_text_color(view.layers.hour, config->color_primary);
   text_layer_set_text_alignment(view.layers.hour, GTextAlignmentRight);
@@ -1767,7 +1857,7 @@ void main_window_load(Window *window) {
   
   // Create and add the colon layer, I like my colon exactly in the middle
   view.layers.colon = text_layer_create(
-      GRect(0, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w, 60));
+      GRect(0, PBL_IF_ROUND_ELSE(58, 52) + v_offset, bounds.size.w, 60));
   text_layer_set_background_color(view.layers.colon, GColorClear);
   text_layer_set_text_color(view.layers.colon, config->color_accent);
   text_layer_set_text_alignment(view.layers.colon, GTextAlignmentCenter);
@@ -1777,7 +1867,7 @@ void main_window_load(Window *window) {
   
   // Create and add the minute layer
   view.layers.minute = text_layer_create(
-      GRect(bounds.size.w / 2 + 4, PBL_IF_ROUND_ELSE(58, 52), bounds.size.w / 2 - 4, 60));
+      GRect(bounds.size.w / 2 + 4, PBL_IF_ROUND_ELSE(58, 52) + v_offset, bounds.size.w / 2 - 4, 60));
   text_layer_set_background_color(view.layers.minute, GColorClear);
   text_layer_set_text_color(view.layers.minute, config->color_primary);
   text_layer_set_text_alignment(view.layers.minute, GTextAlignmentLeft);
@@ -1824,7 +1914,7 @@ void main_window_unload(Window *window) {
   if (view.layers.switcher) layer_destroy(view.layers.switcher);
   
   // Unload custom fonts
-  fonts_unload_custom_font(view.fonts.primary);
+  if (view.primary_font_custom) fonts_unload_custom_font(view.fonts.primary); // The others are system fonts
   fonts_unload_custom_font(view.fonts.icons);
   fonts_unload_custom_font(view.fonts.icons_small);
   fonts_unload_custom_font(view.fonts.icons_large);
@@ -1896,12 +1986,9 @@ void view_init() {
   #if defined(PBL_HEALTH)
   if (config->enable_health) activity_changed();
   #endif
-  #if defined(POSSIBLE_HR)
-  if (config->enable_heartrate) {
-    HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-    if (hr & HealthServiceAccessibilityMaskAvailable) {
-      view.layers.heartrate = alternating_layers_create(heartrate_update_proc, ICON_HEARTRATE);
-    }
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+  if (config->enable_heartrate && is_heartrate_available()) {
+    view.layers.heartrate = alternating_layers_create(heartrate_update_proc, ICON_HEARTRATE);
   }
   #endif
   if (config->enable_timezone) view.layers.timezone = alternating_layers_create(timezone_update_proc, ICON_TIMEZONE);

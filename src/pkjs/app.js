@@ -206,6 +206,14 @@ Pebble.addEventListener('appmessage', function(e) {
       analytics.trackException("C crash in zone " + e.payload.Exception + ".");
     } else if (e.payload.Fireworks) {
       analytics.trackEvent('watchface', 'Fireworks');
+    } else if (e.payload.SleepTrust) {
+      if (e.payload.SleepTrust == 1) {
+        analytics.trackEvent('watchface', 'Sleep not trusted');
+      } else if (e.payload.SleepTrust == 2) { 
+        analytics.trackEvent('watchface', 'Sleep trusted again');
+      } else { 
+        analytics.trackEvent('watchface', 'Sleep trust unclear');
+      }
     }
   }
   catch (err) {

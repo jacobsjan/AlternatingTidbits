@@ -31,7 +31,7 @@ static char* ICON_RUN = "\uf2ae";
 static char* ICON_SLEEP = "\uf2af";
 #endif
 
-#if defined(POSSIBLE_HR)
+#if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
 static char* ICON_HEARTRATE = "\uf2b5";
 #endif
 

@@ -1,7 +1,5 @@
 #pragma once
-#include<pebble.h>
-
-#define POSSIBLE_HR ((PBL_HEALTH) && (defined(PBL_DIORITE) || (defined(PBL_EMERY))))
+#include <pebble.h>
 
 enum WeatherCondition {
   CONDITION_CLEAR = 0,
@@ -62,7 +60,7 @@ enum HealthIndicator {
   HEALTH_AVG_TIME_DEEP_SLEEP,
   HEALTH_AVG_TIME_TOTAL_SLEEP,
   HEALTH_CLIMB_DESCEND,
-  #if defined(POSSIBLE_HR)
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
   HEALTH_HEARTRATE
   #endif
 };

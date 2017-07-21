@@ -27,9 +27,6 @@ struct Config {
   #if defined(PBL_HEALTH)
   bool enable_health;
   #endif
-  #if defined(POSSIBLE_HR)
-  bool enable_heartrate;
-  #endif
   bool enable_moonphase;
   bool enable_sun;
   bool enable_weather;
@@ -75,6 +72,14 @@ struct Config {
   bool moonphase_night_only;
   
   int weather_refresh;
+  
+  // Additions post version 1.5  
+  char font_large;
+  char font_small;
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+  bool enable_heartrate;
+  bool heartrate_zone;
+  #endif
 };
 
 bool parse_configuration_messages(DictionaryIterator*);

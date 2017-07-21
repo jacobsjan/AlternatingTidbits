@@ -77,14 +77,10 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     if (model->update_req & UPDATE_ALTITUDE) altitude_req_changed(true);
         
     // Signal that a heartrate sensor is available
-    #if defined(POSSIBLE_HR)
-    HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-    if (hr & HealthServiceAccessibilityMaskAvailable) {
-      HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
-      if(val > 0) {
+    #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+    if (is_heartrate_available()) {
         message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_HeartrateAvailable, 1));
-      }
-    }    
+    } 
     #endif
   }
   
@@ -243,7 +239,7 @@ void update_health() {
   // Create sharp begin edge
   if (avg_steps_per_minute > 0 && (current_activity != model->activity || activity_start.time == 0)) {
     if (model->activity == ACTIVITY_RUN && current_activity == ACTIVITY_WALK) {
-      // We stopped running, keep running as current activity, check at the sharp end check whether to switch back to walking or not
+      // We stopped running, keep running as current activity, check at the sharp end whether to switch back to walking or not
       current_activity = ACTIVITY_RUN;
     } else {
       if (current_activity == ACTIVITY_WALK || current_activity == ACTIVITY_RUN) {
@@ -254,21 +250,18 @@ void update_health() {
             // Activity had not yet started this minute
             first_index = next_index;
           } else {
-            // Activity had started this minute, start_index found
-            if (current_activity == ACTIVITY_WALK) {
-              // Make sure we didn't start a run rather than a walk
-              avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[first_index].totalStepCount;
-              avg_steps_per_minute /= (last_index - first_index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
-              if (avg_steps_per_minute >= STEPS_PER_MINUTE_RUNNING) {
-                // Started a run rather than a walk
-                current_activity = ACTIVITY_RUN;
-                if (steps_this_minute < STEPS_PER_MINUTE_RUNNING) {
-                  // But this minute wasn't all running, start at the next
-                  first_index = next_index;
-                }
-              }
-            }
+            // Activity had started this minute, first_index found
             break;
+          }
+        }
+        
+        // Make sure we didn't start a run rather than a walk
+        if (current_activity == ACTIVITY_WALK) {
+          avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[first_index].totalStepCount;
+          avg_steps_per_minute /= (last_index - first_index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+          if (avg_steps_per_minute >= STEPS_PER_MINUTE_RUNNING) {
+            // Started a run rather than a walk
+            current_activity = ACTIVITY_RUN;
           }
         }
       }
@@ -622,7 +615,8 @@ static void app_init() {
   // Initialize localization of time and date info
   setlocale(LC_TIME, i18n_get_system_locale());
     
-  // Initialize the view
+  // Initialize view & utils
+  utils_init();
   view_init();
   
   // Set up watch communication
@@ -651,8 +645,9 @@ static void app_deinit() {
   connection_service_unsubscribe();
   app_message_deregister_callbacks();
   
-  // De-initialize view
+  // De-initialize view & utils
   view_deinit();
+  utils_deinit();
   
   // Unsubscribe from tick service, view_deinit() will register to minutes
   tick_timer_service_unsubscribe();

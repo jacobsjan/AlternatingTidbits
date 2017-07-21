@@ -62,6 +62,97 @@ module.exports = [
     "items": [
       {
         "type": "heading",
+        "defaultValue": "Fonts"
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgFontLarge",
+        "defaultValue": 'A',
+        "label": "Large font",
+        "options": [
+          { 
+            "label": "Default", 
+            "value": 'A' 
+          },
+          { 
+            "label": "Bitham light", 
+            "value": 'B' 
+          },
+          { 
+            "label": "Bitham medium", 
+            "value": 'C' 
+          },
+          { 
+            "label": "Bitham bold", 
+            "value": 'D' 
+          },
+          { 
+            "label": "Leco", 
+            "value": 'E' 
+          },
+          { 
+            "label": "Roboto", 
+            "value": 'F' 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgFontSmall",
+        "defaultValue": 'N',
+        "label": "Small font",
+        "capabilities": ["BW"],
+        "options": [
+          { 
+            "label": "Bold", 
+            "value": 'B' 
+          },
+          { 
+            "label": "Bold + thin accents", 
+            "value": 'N' 
+          },
+          { 
+            "label": "Thin + bold accents", 
+            "value": 'A' 
+          },
+          { 
+            "label": "Thin", 
+            "value": 'T' 
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgFontSmall",
+        "defaultValue": 'B',
+        "label": "Small font",
+        "capabilities": ["COLOR"],
+        "options": [
+          { 
+            "label": "Bold", 
+            "value": 'B' 
+          },
+          { 
+            "label": "Bold + thin accents", 
+            "value": 'N' 
+          },
+          { 
+            "label": "Thin + bold accents", 
+            "value": 'A' 
+          },
+          { 
+            "label": "Thin", 
+            "value": 'T' 
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
         "defaultValue": "Date and Time Format"
       },
       {

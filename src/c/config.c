@@ -27,6 +27,12 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->color_accent = GColorFromHEX(tuple->value->int32); 
   #endif
   
+  // Fonts
+  tuple = dict_find(iter, MESSAGE_KEY_cfgFontLarge);
+  if(tuple && (cfgChanged = true)) config->font_large = tuple->value->cstring[0]; 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgFontSmall);
+  if(tuple && (cfgChanged = true)) config->font_small = tuple->value->cstring[0]; 
+  
   // Time and date format
   tuple = dict_find(iter, MESSAGE_KEY_cfgDateHoursLeadingZero);
   if(tuple && (cfgChanged = true)) config->date_hours_leading_zero = tuple->value->int8; 
@@ -62,7 +68,7 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHealth);
   if(tuple && (cfgChanged = true)) config->enable_health = tuple->value->int8;
   #endif  
-  #if defined(POSSIBLE_HR)
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHeartrate);
   if(tuple && (cfgChanged = true)) config->enable_heartrate = tuple->value->int8;
   #endif
@@ -149,6 +155,12 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) config->health_sleep_bottom = tuple->value->int32;
   #endif 
   
+  // Heart rate
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+  tuple = dict_find(iter, MESSAGE_KEY_cfgHeartrateZone);
+  if(tuple && (cfgChanged = true)) config->heartrate_zone = tuple->value->int8;  
+  #endif 
+    
   // Moonphase
   tuple = dict_find(iter, MESSAGE_KEY_cfgMoonphaseNightOnly);
   if(tuple && (cfgChanged = true)) config->moonphase_night_only = tuple->value->int8;
@@ -161,76 +173,88 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
 }
 
 void config_load() {
-  if (persist_exists(STORAGE_CONFIG) && persist_get_size(STORAGE_CONFIG) == sizeof(actual_config)) {
+  // Initialize with defaults
+  config->color_background = GColorWhite;
+  config->color_primary = GColorBlack;
+  config->color_secondary = GColorDarkGray;
+  config->color_accent = GColorDarkCandyAppleRed; 
+
+  config->font_large = 'A';
+  #if defined(PBL_BW)
+  config->font_small = 'N';
+  #else
+  config->font_small = 'B';
+  #endif
+
+  config->date_hours_leading_zero = false;   
+  strncpy(config->date_format_top, "z", sizeof(config->date_format_top));
+  strncpy(config->date_format_bottom, "B e", sizeof(config->date_format_bottom));
+
+  config->vibrate_bluetooth = true;
+  config->vibrate_hourly = false;
+
+  config->altitude_unit = 'M';
+  config->health_number_format = 'M';
+  #if defined(PBL_HEALTH)
+  config->health_distance_unit = 'M';
+  #endif
+
+  config->enable_timezone = false;
+  config->enable_altitude = false;
+  config->enable_battery = true;
+  #if defined(PBL_COMPASS)
+  config->enable_compass = true;
+  #endif
+  config->enable_countdown = false;
+  config->enable_error = false;
+  config->enable_happy = true;
+  #if defined(PBL_HEALTH)
+  config->enable_health = true;
+  #endif
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+  config->enable_heartrate = true;
+  #endif
+  config->enable_moonphase = true;
+  config->enable_sun = true;
+  config->enable_weather = true;
+  config->alternate_mode = 'B';
+  config->switcher_animate = true;
+
+  config->battery_show_from = 100;
+  config->battery_accent_from = 30;
+
+  #if defined(PBL_COMPASS)
+  config->compass_switcher_only = true;
+  #endif
+
+  #if defined(PBL_HEALTH)
+  config->health_stick = true;
+  config->health_normal_top = HEALTH_EMPTY;
+  config->health_normal_middle = HEALTH_EMPTY;
+  config->health_normal_bottom = HEALTH_TODAY_STEPS;
+  config->health_walk_top = HEALTH_EMPTY;
+  config->health_walk_middle = HEALTH_ACTIVITY_DISTANCE;
+  config->health_walk_bottom = HEALTH_TODAY_STEPS;
+  config->health_run_top = HEALTH_ACTIVITY_DURATION;
+  config->health_run_middle = HEALTH_ACTIVITY_DISTANCE;
+  config->health_run_bottom = HEALTH_ACTIVITY_SPEED;
+  config->health_sleep_top = HEALTH_EMPTY;
+  config->health_sleep_middle = HEALTH_EMPTY;
+  config->health_sleep_bottom = HEALTH_TIME_TOTAL_SLEEP;
+  #endif
+
+  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+  config->heartrate_zone = true;
+  #endif
+
+  config->moonphase_night_only = true;
+
+  config->weather_refresh = 30; 
+  
+  // Load settings from storage
+  if (persist_exists(STORAGE_CONFIG) && persist_get_size(STORAGE_CONFIG) <= (int)sizeof(actual_config)) {
     // Read config from storage
     persist_read_data(STORAGE_CONFIG, config, sizeof(actual_config));
-  } else {
-    // Initialize with defaults
-    config->color_background = GColorWhite;
-    config->color_primary = GColorBlack;
-    config->color_secondary = GColorDarkGray;
-    config->color_accent = GColorDarkCandyAppleRed; 
-    
-    config->date_hours_leading_zero = false;   
-    strncpy(config->date_format_top, "z", sizeof(config->date_format_top));
-    strncpy(config->date_format_bottom, "B e", sizeof(config->date_format_bottom));
-    
-    config->vibrate_bluetooth = true;
-    config->vibrate_hourly = false;
-    
-    config->altitude_unit = 'M';
-    config->health_number_format = 'M';
-    #if defined(PBL_HEALTH)
-    config->health_distance_unit = 'M';
-    #endif
-    
-    config->enable_timezone = false;
-    config->enable_altitude = false;
-    config->enable_battery = true;
-    #if defined(PBL_COMPASS)
-    config->enable_compass = true;
-    #endif
-    config->enable_countdown = false;
-    config->enable_error = false;
-    config->enable_happy = true;
-    #if defined(PBL_HEALTH)
-    config->enable_health = true;
-    #endif
-    #if defined(POSSIBLE_HR)
-    config->enable_heartrate = true;
-    #endif
-    config->enable_moonphase = true;
-    config->enable_sun = true;
-    config->enable_weather = true;
-    config->alternate_mode = 'B';
-    config->switcher_animate = true;
-    
-    config->battery_show_from = 100;
-    config->battery_accent_from = 30;
-    
-    #if defined(PBL_COMPASS)
-    config->compass_switcher_only = true;
-    #endif
-    
-    #if defined(PBL_HEALTH)
-    config->health_stick = true;
-    config->health_normal_top = HEALTH_EMPTY;
-    config->health_normal_middle = HEALTH_EMPTY;
-    config->health_normal_bottom = HEALTH_TODAY_STEPS;
-    config->health_walk_top = HEALTH_EMPTY;
-    config->health_walk_middle = HEALTH_ACTIVITY_DISTANCE;
-    config->health_walk_bottom = HEALTH_TODAY_STEPS;
-    config->health_run_top = HEALTH_ACTIVITY_DURATION;
-    config->health_run_middle = HEALTH_ACTIVITY_DISTANCE;
-    config->health_run_bottom = HEALTH_ACTIVITY_SPEED;
-    config->health_sleep_top = HEALTH_EMPTY;
-    config->health_sleep_middle = HEALTH_EMPTY;
-    config->health_sleep_bottom = HEALTH_TIME_TOTAL_SLEEP;
-    #endif
-    
-    config->moonphase_night_only = true;
-    
-    config->weather_refresh = 30; 
   }
 }
 
