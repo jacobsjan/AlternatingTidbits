@@ -34,8 +34,8 @@ bool is_asleep() {
     } else {
       // The sleep time is not changing, since how long?
       long diff = time(NULL) - last_sleep_update;
-      if (diff > SECONDS_PER_MINUTE * 10) {
-        // Peek has been saying we are sleeping for more than 10 minutes while the sleep time is not increasing, don't trust it
+      if (diff > SECONDS_PER_MINUTE * 15) {
+        // Peek has been saying we are sleeping for more than 15 minutes while the sleep time is not increasing, don't trust it
         sleep_trusted = false;
         
         // Send sleep trust to analytics 

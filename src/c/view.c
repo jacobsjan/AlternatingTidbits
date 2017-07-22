@@ -366,7 +366,7 @@ static long ymd_to_days (int yr, int mo, int day) {
   return scalar;
 }
 
-int determine_sign(char** sign_text, int remainder, int large_unit, int small_unit) {
+static int determine_sign(char** sign_text, int remainder, int large_unit, int small_unit) {
   if (remainder > large_unit - small_unit / 2) {
     *sign_text = "≈";
     return 1;
