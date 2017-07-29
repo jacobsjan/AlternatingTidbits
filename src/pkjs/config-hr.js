@@ -524,6 +524,16 @@ module.exports = [
         }
       },
       {
+        "type": "button",
+        "id": "CountdownRemoveButton",
+        "defaultValue": "Remove this countdown"
+      },
+      {
+        "type": "button",
+        "id": "CountdownAddButton",
+        "defaultValue": "Add another countdown"
+      },
+      {
         "type": "radiogroup",
         "messageKey": "cfgCountdownDisplay",
         "defaultValue": 'F',
@@ -538,7 +548,7 @@ module.exports = [
             "value": 'I'
           }
         ],
-        "description": "'in 4w 3d 22h 5m' vs. 'in 4 weeks'"
+        "description": "'4w 3d 22h 5m' vs. '>4 weeks'"
       }
     ]
   },

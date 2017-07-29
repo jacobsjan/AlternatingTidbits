@@ -116,6 +116,9 @@ struct View {
   // Fireworks
   struct Fireworks* fireworks;
   time_t fireworks_time;
+  
+  // Countdown
+  int countdownIndex;
 };
 
 struct View view;
@@ -390,21 +393,23 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   // and mktime seems to completely fail on the Pebble so we're doing all countdown
   // calculations in local time.
   
+  struct CountdownConfig* countdown = &config->countdowns[view.countdownIndex];
+  
   // Convert target and now to tm formats
-  time_t now = config->countdown_to == 'D' ? time_start_of_today() : (time(NULL) / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE;
+  time_t now = countdown->to == 'D' ? time_start_of_today() : (time(NULL) / SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE;
   struct tm now_tm = *localtime(&now);
   struct tm target_tm;
-  if (config->countdown_to != 'E') {
-    target_tm.tm_year = config->countdown_date / 10000 - 1900;
-    target_tm.tm_mon = (config->countdown_date % 10000) / 100 - 1;
-    target_tm.tm_mday = config->countdown_date % 100;
+  if (countdown->to != 'E') {
+    target_tm.tm_year = countdown->date / 10000 - 1900;
+    target_tm.tm_mon = (countdown->date % 10000) / 100 - 1;
+    target_tm.tm_mday = countdown->date % 100;
   } else {
     target_tm.tm_year = now_tm.tm_year;
     target_tm.tm_mon = now_tm.tm_mon;
     target_tm.tm_mday = now_tm.tm_mday;
   }
-  target_tm.tm_hour = config->countdown_time / 100;
-  target_tm.tm_min = config->countdown_time % 100;
+  target_tm.tm_hour = countdown->time / 100;
+  target_tm.tm_min = countdown->time % 100;
   target_tm.tm_sec = 0;
   
   // Convert target and now to comparable formats
@@ -421,14 +426,12 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   
   // Choose icon, pre- and post-text, max_tm and min_tm
   char *countdown_icon;
-  char *pre_text;
   char *post_text;
   struct tm max_tm, min_tm;
   if (target_comp > now_comp) {
     // Count down to
-    pre_text = "in ";
     post_text = NULL;    
-    if (config->countdown_to == 'D') {
+    if (countdown->to == 'D') {
       countdown_icon = ICON_COUNTDOWN_TO_DATE; 
     } else  {
       countdown_icon = ICON_COUNTDOWN_TO_TIME;
@@ -437,9 +440,8 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     min_tm = now_tm;
   } else {
     // Count down to
-    pre_text = NULL;
     post_text = "ago";
-    if (config->countdown_to == 'D') {
+    if (countdown->to == 'D') {
       countdown_icon = ICON_COUNTDOWN_FROM_DATE;
     } else {
       countdown_icon = ICON_COUNTDOWN_FROM_TIME;
@@ -471,15 +473,15 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
   diff = diff * 60;
   
   // Display results
-  char *middle_texts[] = { config->countdown_label }; 
-  if (diff == 0 || (config->countdown_to == 'D' && diff == SECONDS_PER_DAY)) {
+  char *middle_texts[] = { countdown->label }; 
+  if (diff == 0 || (countdown->to == 'D' && diff == SECONDS_PER_DAY)) {
     // Display one word
     char* normal_text;
     char* accent_text;
     
     if (diff == 0) {
       normal_text = NULL;
-      if (config->countdown_to == 'D') {
+      if (countdown->to == 'D') {
         accent_text = "Today";
       } else {
         accent_text = "Now";
@@ -523,55 +525,55 @@ static void countdown_update_proc(Layer *layer, GContext *ctx) {
     }
     
     // Draw
-    char *bottom_texts[] = { pre_text, NULL, year_count, year_label, month_count, month_label, day_count, day_label, hour_count, hour_label, minute_count, minute_label, post_text }; 
+    char *bottom_texts[] = { year_count, year_label, month_count, month_label, day_count, day_label, hour_count, hour_label, minute_count, minute_label, post_text }; 
     draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   } else {
     // Display incremental detail
     int count;
     int remainder;
     char* unit;
-    char* sign_text;
+    char* pre_text;
     char count_text[6];
     if (year_diff > 3 || (year_diff == 3 && (month_diff > 0 || day_diff > 0 || hour_diff > 0 || min_diff > 0))) {
       count = year_diff;
       remainder = ymd_to_days(max_tm.tm_year - year_diff + 1900, max_tm.tm_mon + 1, max_tm.tm_mday) - ymd_to_days(min_tm.tm_year + 1900, min_tm.tm_mon + 1, min_tm.tm_mday);
       remainder *= SECONDS_PER_DAY;
       remainder += hour_diff * SECONDS_PER_HOUR + min_diff * SECONDS_PER_MINUTE;
-      count += determine_sign(&sign_text, remainder, (is_leap(max_tm.tm_year + 1900) ? 366 : 365) * SECONDS_PER_DAY, SECONDS_PER_DAY);
+      count += determine_sign(&pre_text, remainder, (is_leap(max_tm.tm_year + 1900) ? 366 : 365) * SECONDS_PER_DAY, SECONDS_PER_DAY);
       unit = " years ";
     } else if (year_diff * 12 + month_diff > 3 || (month_diff == 3 && (day_diff > 0 || hour_diff > 0 || min_diff > 0))) {
       count = year_diff * 12 + month_diff;
       remainder = day_diff * SECONDS_PER_DAY + hour_diff * SECONDS_PER_HOUR + min_diff * SECONDS_PER_MINUTE;
-      count += determine_sign(&sign_text, remainder, days_per_month(max_tm.tm_mon, max_tm.tm_year) * SECONDS_PER_DAY, SECONDS_PER_DAY);
+      count += determine_sign(&pre_text, remainder, days_per_month(max_tm.tm_mon, max_tm.tm_year) * SECONDS_PER_DAY, SECONDS_PER_DAY);
       unit = " months ";
     } else if (diff > 3 * 7 * SECONDS_PER_DAY) {
       count = diff / (7 * SECONDS_PER_DAY);
       remainder = diff % (7 * SECONDS_PER_DAY);
-      count += determine_sign(&sign_text, remainder, 7 * SECONDS_PER_DAY, SECONDS_PER_DAY);
+      count += determine_sign(&pre_text, remainder, 7 * SECONDS_PER_DAY, SECONDS_PER_DAY);
       unit = " weeks ";
-    } else if (diff > 3 * SECONDS_PER_DAY || config->countdown_to == 'D') {
+    } else if (diff > 3 * SECONDS_PER_DAY || countdown->to == 'D') {
       count = diff / SECONDS_PER_DAY;
       remainder = diff % SECONDS_PER_DAY;
-      count += determine_sign(&sign_text, remainder, SECONDS_PER_DAY, SECONDS_PER_HOUR);
+      count += determine_sign(&pre_text, remainder, SECONDS_PER_DAY, SECONDS_PER_HOUR);
       unit = " days ";
     } else if (diff > 3 * SECONDS_PER_HOUR) {
       count = diff / SECONDS_PER_HOUR;
       remainder = diff % SECONDS_PER_HOUR;
-      count += determine_sign(&sign_text, remainder, SECONDS_PER_HOUR, SECONDS_PER_MINUTE);
+      count += determine_sign(&pre_text, remainder, SECONDS_PER_HOUR, SECONDS_PER_MINUTE);
       unit = " hours ";
     } else if (diff > SECONDS_PER_MINUTE) {
       count = diff / SECONDS_PER_MINUTE;
-      sign_text = NULL;
+      pre_text = NULL;
       unit = " minutes ";
     } else {
       count = 1;
-      sign_text = NULL;
+      pre_text = NULL;
       unit = " minute ";   
     }    
     snprintf(count_text, sizeof(count_text), "%d", count);    
   
     // Draw
-    char *bottom_texts[] = { pre_text, NULL, sign_text, count_text, unit, NULL, post_text };
+    char *bottom_texts[] = { pre_text, count_text, unit, NULL, post_text };
     draw_multi_centered(layer, ctx, countdown_icon, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
   }
 }
@@ -1344,6 +1346,11 @@ void alternating_layers_show(int index) {
     }
     
     view.alt_layer_visible = index;
+    
+    // Rotate through countdowns
+    if (view.alt_layers[view.alt_layer_visible] == view.layers.countdown) {
+      view.countdownIndex = (view.countdownIndex + 1) % config->countdown_count;
+    }
   }
 }
 

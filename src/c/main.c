@@ -645,18 +645,16 @@ static void app_deinit() {
   connection_service_unsubscribe();
   app_message_deregister_callbacks();
   
-  // De-initialize view & utils
+  // De-initialize view, utils & config
   view_deinit();
   utils_deinit();
+  config_deinit();
   
   // Unsubscribe from tick service, view_deinit() will register to minutes
   tick_timer_service_unsubscribe();
   
   // Clear messages left in the message queue
   message_queue_deinit();
-  
-  // Save configuration
-  config_save();
   
   // Save health activity
   #if defined(PBL_HEALTH)

@@ -1,22 +1,13 @@
 #pragma once
 #include <pebble.h>
+#include "config.h"
 #include "model.h"
 
-struct CountdownConfig {  
-  char label[30];
-  char to;
-  int time;
-  int date;
-};
-
-struct Config {
+struct ConfigV15 {
   GColor color_background;
   GColor color_primary;
   GColor color_secondary;
   GColor color_accent;
-  
-  char font_large;
-  char font_small;
   
   bool date_hours_leading_zero;
   char date_format_top[11];
@@ -37,9 +28,6 @@ struct Config {
   #if defined(PBL_HEALTH)
   bool enable_health;
   #endif
-  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
-  bool enable_heartrate;
-  #endif
   bool enable_moonphase;
   bool enable_sun;
   bool enable_weather;
@@ -58,8 +46,10 @@ struct Config {
   bool compass_switcher_only;
   #endif
   
-  int countdown_count;
-  struct CountdownConfig* countdowns;
+  char countdown_label[30];
+  char countdown_to;
+  int countdown_time;
+  int countdown_date;
   char countdown_display;
   
   char health_number_format;
@@ -79,19 +69,10 @@ struct Config {
   enum HealthIndicator health_sleep_middle;
   enum HealthIndicator health_sleep_bottom;
   #endif
-    
-  #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
-  bool heartrate_zone;
-  #endif
   
   bool moonphase_night_only;
   
   int weather_refresh;
 };
 
-bool parse_configuration_messages(DictionaryIterator*);
-void config_load();
-void config_save();
-void config_deinit();
-
-extern struct Config* config;
+void convert_config_v15(struct Config* toConfig, struct ConfigV15* fromConfig);

@@ -92,7 +92,9 @@
             "cfgHeartrateZone",
             "cfgFontSmall",
             "cfgFontLarge",
-            "SleepTrust"
+            "SleepTrust",
+            "cfgCountdownCount",
+            "cfgCountdownIndex"
         ],
         "projectType": "native",
         "resources": {

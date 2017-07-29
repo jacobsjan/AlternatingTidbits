@@ -24,22 +24,146 @@ module.exports = function(minified) {
     batteryAccentFrom.$manipulatorTarget.set('@max', batteryShowFrom.get());
   }
   
-  function showCountdownTimeDate() {
-    var timeInput = clayConfig.getItemByMessageKey('cfgCountdownTime');
-    var dateInput = clayConfig.getItemByMessageKey('cfgCountdownDate');
-    var label = clayConfig.getItemByMessageKey('cfgCountdownLabel');
-    if (this.get() === "D") { // To date
-      timeInput.hide();
-      dateInput.show();
-      label.$manipulatorTarget.set('@placeholder', 'eg: Holiday');
-    } else if (this.get() === "T") { // To time and date 
-      timeInput.show();
-      dateInput.show();
-      label.$manipulatorTarget.set('@placeholder', 'eg: Party!');
+  function countdownToChanged() {
+    var value = this.options[this.selectedIndex].value;
+    var text = this.options[this.selectedIndex].text;
+
+    // Set label text
+    this.previousElementSibling.innerHTML = text;
+    
+    // Show/hide date and time input
+    var labelInput = this.parentNode.parentNode.previousElementSibling.getElementsByTagName("input")[0];
+    var time = this.parentNode.parentNode.nextElementSibling;
+    var date = time.nextElementSibling;
+    if (value === "D") { // To date
+      time.classList.add('hide');
+      date.classList.remove('hide');
+      labelInput.setAttribute('placeholder', 'eg: Holiday');
+    } else if (value === "T") { // To time and date 
+      time.classList.remove('hide');
+      date.classList.remove('hide');
+      labelInput.setAttribute('placeholder', 'eg: Party!');
     } else { // To time every day 
-      timeInput.show();
-      dateInput.hide();
-      label.$manipulatorTarget.set('@placeholder', 'eg: Go home');
+      time.classList.remove('hide');
+      date.classList.add('hide');
+      labelInput.setAttribute('placeholder', 'eg: Go home');
+    }
+  }
+  
+  function showCountdownRemoveButtons() {
+    var countdownSection = clayConfig.getItemById('CountdownAddButton').$element[0].parentNode;
+    var show = Math.floor(countdownSection.childElementCount / 5) > 1;
+    for (var i = 5; i < countdownSection.childElementCount; i = i + 5) {
+      var removeButton = countdownSection.children[i];
+      if (show) {
+        removeButton.classList.remove('hide');
+      } else {
+        removeButton.classList.add('hide');
+      }
+    }
+  }
+  
+  function removeCountdown() {
+    var removeButtonElement = this.parentNode;
+    var dateElement = removeButtonElement.previousSibling;
+    var timeElement = dateElement.previousSibling;
+    var countdownToElement = timeElement.previousSibling;
+    var labelElement = countdownToElement.previousSibling;
+    
+    removeButtonElement.parentNode.removeChild(labelElement);
+    removeButtonElement.parentNode.removeChild(countdownToElement);
+    removeButtonElement.parentNode.removeChild(timeElement);
+    removeButtonElement.parentNode.removeChild(dateElement);
+    removeButtonElement.parentNode.removeChild(removeButtonElement);
+    
+    showCountdownRemoveButtons();
+  }
+  
+  function addCountdown() {
+    var addButtonElement = clayConfig.getItemById('CountdownAddButton').$element[0];
+    var removeButtonElement = addButtonElement.previousSibling;
+    var dateElement = removeButtonElement.previousSibling;
+    var timeElement = dateElement.previousSibling;
+    var countdownToElement = timeElement.previousSibling;
+    var labelElement = countdownToElement.previousSibling;
+    
+    removeButtonElement = removeButtonElement.cloneNode(true);
+    dateElement = dateElement.cloneNode(true);
+    timeElement = timeElement.cloneNode(true);
+    countdownToElement = countdownToElement.cloneNode(true);
+    labelElement = labelElement.cloneNode(true);
+    
+    labelElement.getElementsByTagName("input")[0].value = "";
+    countdownToElement.getElementsByTagName("select")[0].value = "D";
+    countdownToElement.getElementsByTagName("select")[0].addEventListener('change', countdownToChanged); 
+    timeElement.getElementsByTagName("input")[0].value = "";
+    dateElement.getElementsByTagName("input")[0].value = "";
+    removeButtonElement.getElementsByTagName("button")[0].addEventListener('click', removeCountdown); 
+    
+    addButtonElement.parentNode.insertBefore(labelElement, addButtonElement);
+    addButtonElement.parentNode.insertBefore(countdownToElement, addButtonElement);
+    addButtonElement.parentNode.insertBefore(timeElement, addButtonElement);    
+    addButtonElement.parentNode.insertBefore(dateElement, addButtonElement);
+    addButtonElement.parentNode.insertBefore(removeButtonElement, addButtonElement);
+        
+    countdownToChanged.call(countdownToElement.getElementsByTagName("select")[0]);
+    showCountdownRemoveButtons();
+  }
+  
+  function submitCountdown() {
+    var countdownLabel = clayConfig.getItemByMessageKey('cfgCountdownLabel');
+    
+    var countdownSection = countdownLabel.$element[0].parentNode;
+    var count = Math.floor(countdownSection.childElementCount / 5);
+    var countdowns = [ ];
+    for (var i = 0; i < count; ++i) {
+      var labelElement = countdownSection.children[1 + i * 5].getElementsByTagName("input")[0];
+      var countdownToElement = countdownSection.children[2 + i * 5].getElementsByTagName("select")[0];
+      var timeElement = countdownSection.children[3 + i * 5].getElementsByTagName("input")[0];
+      var dateElement = countdownSection.children[4 + i * 5].getElementsByTagName("input")[0];
+      
+      countdowns.push({
+        label: labelElement.value,
+        countdownTo: countdownToElement.options[countdownToElement.selectedIndex].value,
+        time: timeElement.value,
+        date: dateElement.value
+      });
+    }
+    
+    // Set value
+    countdownLabel.$element.select("input")[0].removeAttribute("maxlength");
+    countdownLabel.set(JSON.stringify(countdowns));
+  }
+  
+  function loadCountdowns() {    
+    try {
+      // Parse countdown configuration from countdown label
+      var countdownLabel = clayConfig.getItemByMessageKey('cfgCountdownLabel');
+      var countdowns = JSON.parse(countdownLabel.get());
+      countdownLabel.set("");
+      
+      var countdownAdd = clayConfig.getItemById('CountdownAddButton');
+      var addButtonElement = countdownAdd.$element[0];
+      
+      for (var j = 0; j < countdowns.length; ++j) {
+        var removeButtonElement = addButtonElement.previousSibling;
+        var dateElement = removeButtonElement.previousSibling;
+        var timeElement = dateElement.previousSibling;
+        var countdownToElement = timeElement.previousSibling;
+        var labelElement = countdownToElement.previousSibling;
+            
+        labelElement.getElementsByTagName("input")[0].value = countdowns[j].label;
+        countdownToElement.getElementsByTagName("select")[0].value = countdowns[j].countdownTo; 
+        countdownToChanged.call(countdownToElement.getElementsByTagName("select")[0]);
+        timeElement.getElementsByTagName("input")[0].value = countdowns[j].time;
+        dateElement.getElementsByTagName("input")[0].value = countdowns[j].date;
+        
+        if (j < countdowns.length - 1) {
+          addCountdown();
+        }          
+      }
+    } catch (e) {
+      // The countdownlabel does not contain JSON, first time or previous version
     }
   }
   
@@ -135,9 +259,26 @@ module.exports = function(minified) {
     
     // Countdown show/hide of date and time
     var countdownTo = clayConfig.getItemByMessageKey('cfgCountdownTo');
-    showCountdownTimeDate.call(countdownTo);
-    countdownTo.on('change', showCountdownTimeDate); 
+    var countdownToSelect = countdownTo.$element[0].getElementsByTagName("select")[0];
+    countdownToChanged.call(countdownToSelect);
+    countdownToSelect.addEventListener('change', countdownToChanged); 
+        
+    // Countdown remove buttons
+    var countdownRemove = clayConfig.getItemById('CountdownRemoveButton');
+    countdownRemove.$element[0].getElementsByTagName("button")[0].addEventListener('click', removeCountdown); 
+    showCountdownRemoveButtons();
     
+    // Countdown add button
+    var countdownAdd = clayConfig.getItemById('CountdownAddButton');
+    countdownAdd.on('click', addCountdown); 
+    
+    // Countdown submit serialization
+    var submitElement = countdownAdd.$element[0].ownerDocument.querySelector("button[type=submit]");
+    submitElement.addEventListener("click", submitCountdown);
+    
+    // Load/parse countdowns
+    loadCountdowns();
+        
     // Weather provider
     var weatherProvider = clayConfig.getItemByMessageKey('cfgWeatherProvider');
     showWeatherProviderKey.call(weatherProvider);

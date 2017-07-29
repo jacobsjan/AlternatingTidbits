@@ -60,12 +60,14 @@ clay.registerComponent(require('./clay-component-dateformat'));
 clay.registerComponent(require('./clay-component-timezone'));
 
 Pebble.addEventListener('showConfiguration', function(e) {
+  // Show HR or default config page?
   if (heartrateAvailable) {
     clay.config = clayConfigHR;
   } else {
     clay.config = clayConfig;
   }
   
+  // Open configuration page
   Pebble.openURL(clay.generateUrl());
 });
 
@@ -73,40 +75,34 @@ Pebble.addEventListener('webviewclosed', function(e) {
   if (e && !e.response) {
     return;
   }
-
+  
   // Get the keys and values from each config item
   var dict = clay.getSettings(e.response);
+  
+  // Remove invalid countdown information
+  var countdowns = JSON.parse(dict[keys.cfgCountdownLabel]);
+  countdowns = removeInvalidCountdowns(countdowns);
+  clay.setSettings("cfgCountdownLabel", JSON.stringify(countdowns));
+  
+  // Add countdown count and index
+  dict[keys.cfgCountdownCount] = countdowns.length;
+  if (countdowns.length == 0) {
+    // Disable countdown tidbit if there are no valid countdown targets
+    dict[keys.cfgEnableCountdown] = 0;
+    dict[keys.cfgCountdownIndex] = -1;
+    clay.setSettings("cfgEnableCountdown", false);
+  } 
+   
+  // Clear countdown info from main data sent to the watch
+  delete dict[keys.cfgCountdownLabel];
+  delete dict[keys.cfgCountdownTo];
+  delete dict[keys.cfgCountdownTime];
+  delete dict[keys.cfgCountdownDate];
   
   // Calculate alternative timezone offset
   var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
   dict[keys.cfgTimeZoneOffset] = timezoneOffset;
-  
-  // Convert countdown time/date to integers, avoiding posix format due to DST issues over longer periods of time
-  var timeElems = dict[keys.cfgCountdownTime].split(':');
-  var dateElems = dict[keys.cfgCountdownDate].split('-');
-  if (dict[keys.cfgCountdownTo] == 'D') {
-    if (dateElems.length == 3) {
-      dict[keys.cfgCountdownTime] = 0; 
-      dict[keys.cfgCountdownDate] = parseInt(dateElems[0]) * 100 * 100 + parseInt(dateElems[1]) * 100 + parseInt(dateElems[2]); 
-    } else {
-      dict[keys.cfgEnableCountdown] = 0;
-    }
-  } else if (dict[keys.cfgCountdownTo] == 'T') {
-    if (dateElems.length == 3 && timeElems.length == 2) {
-      dict[keys.cfgCountdownTime] = parseInt(timeElems[0]) * 100 + parseInt(timeElems[1]); 
-      dict[keys.cfgCountdownDate] = parseInt(dateElems[0]) * 100 * 100 + parseInt(dateElems[1]) * 100 + parseInt(dateElems[2]); 
-    } else {
-      dict[keys.cfgEnableCountdown] = 0;
-    }
-  } else {
-    if (timeElems.length == 2) {
-      dict[keys.cfgCountdownTime] = parseInt(timeElems[0]) * 100 + parseInt(timeElems[1]); 
-      dict[keys.cfgCountdownDate] = 0;
-    } else {
-      dict[keys.cfgEnableCountdown] = 0;
-    }
-  }
-  
+    
   // Convert health indicators to int
   dict[keys.cfgHealthNormalLine1] = parseInt(dict[keys.cfgHealthNormalLine1]);
   dict[keys.cfgHealthNormalLine2] = parseInt(dict[keys.cfgHealthNormalLine2]);
@@ -132,12 +128,66 @@ Pebble.addEventListener('webviewclosed', function(e) {
   // Send settings values to watch side
   sendMessage(dict);
   
+  // Send countdown information seperately to the watch
+  sendCountdowns(countdowns);
+  
   // Reload settings
   settings = JSON.parse(localStorage.getItem('clay-settings'));
   
   // Send settings set to analytics
   analytics.trackEvent('watchface', 'Settings');
 });
+
+function removeInvalidCountdowns(countdowns) {
+  var result = [];
+  
+  for (var i = 0; i < countdowns.length; i++) {
+    // Convert countdown time/date to integers, avoiding posix format due to DST issues over longer periods of time
+    var timeElems = countdowns[i].time.split(':');
+    var dateElems = countdowns[i].date.split('-');
+    if (countdowns[i].countdownTo == 'D') {
+      if (dateElems.length == 3) {
+        result.push(countdowns[i]);
+      }
+    } else if (countdowns[i].countdownTo == 'T') {
+      if (dateElems.length == 3 && timeElems.length == 2) {
+        result.push(countdowns[i]);
+      }
+    } else {
+      if (timeElems.length == 2) {
+        result.push(countdowns[i]);
+      }
+    }
+  }
+  
+  return result;
+}
+
+function sendCountdowns(countdowns) {  
+  for (var i = 0; i < countdowns.length; i++) {
+    var countdownDict = {};
+    countdownDict[keys.cfgCountdownIndex] = i;
+    countdownDict[keys.cfgCountdownLabel] = countdowns[i].label;
+    countdownDict[keys.cfgCountdownTo] = countdowns[i].countdownTo;
+    
+    // Convert countdown time/date to integers, avoiding posix format due to DST issues over longer periods of time
+    var timeElems = countdowns[i].time.split(':');
+    var dateElems = countdowns[i].date.split('-');
+    if (countdowns[i].countdownTo == 'D') {
+      countdownDict[keys.cfgCountdownTime] = 0; 
+      countdownDict[keys.cfgCountdownDate] = parseInt(dateElems[0]) * 100 * 100 + parseInt(dateElems[1]) * 100 + parseInt(dateElems[2]); 
+    } else if (countdowns[i].countdownTo == 'T') {
+      countdownDict[keys.cfgCountdownTime] = parseInt(timeElems[0]) * 100 + parseInt(timeElems[1]); 
+      countdownDict[keys.cfgCountdownDate] = parseInt(dateElems[0]) * 100 * 100 + parseInt(dateElems[1]) * 100 + parseInt(dateElems[2]); 
+    } else {
+      countdownDict[keys.cfgCountdownTime] = parseInt(timeElems[0]) * 100 + parseInt(timeElems[1]); 
+      countdownDict[keys.cfgCountdownDate] = 0;
+    }
+    
+    // Send countdown to watch
+    sendMessage(countdownDict);
+  }
+}
 
 function ack(e) {
   try {

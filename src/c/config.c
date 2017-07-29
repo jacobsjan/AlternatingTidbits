@@ -1,10 +1,12 @@
 #include <pebble.h>
 #include "config.h"
+#include "configv15.h"
 #include "storage.h"
 
 // Initialize the configuration (see https://forums.pebble.com/t/question-regarding-struct/13104/4)
 struct Config actual_config;
 struct Config* config = &actual_config;
+int countdownIndex = 0;
 
 bool parse_configuration_messages(DictionaryIterator* iter) {
   bool cfgChanged = false;
@@ -108,14 +110,22 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   #endif 
   
   // Countdown
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownCount);
+  if(tuple && (cfgChanged = true)) {
+    config->countdown_count = tuple->value->int32;
+    free(config->countdowns);
+    config->countdowns = malloc(sizeof(struct CountdownConfig) * config->countdown_count);
+  }
+  tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownIndex);
+  if(tuple && (cfgChanged = true)) countdownIndex = tuple->value->int32;    
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownLabel);
-  if(tuple && (cfgChanged = true)) strncpy(config->countdown_label, tuple->value->cstring, sizeof(config->countdown_label));  
+  if(tuple && (cfgChanged = true)) strncpy(config->countdowns[countdownIndex].label, tuple->value->cstring, sizeof(((struct CountdownConfig*)0)->label));  
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTo);
-  if(tuple && (cfgChanged = true)) config->countdown_to = tuple->value->cstring[0]; 
+  if(tuple && (cfgChanged = true)) config->countdowns[countdownIndex].to = tuple->value->cstring[0]; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownTime);
-  if(tuple && (cfgChanged = true)) config->countdown_time = tuple->value->int32; 
+  if(tuple && (cfgChanged = true)) config->countdowns[countdownIndex].time = tuple->value->int32; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownDate);
-  if(tuple && (cfgChanged = true)) config->countdown_date = tuple->value->int32; 
+  if(tuple && (cfgChanged = true)) config->countdowns[countdownIndex].date = tuple->value->int32; 
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownDisplay);
   if(tuple && (cfgChanged = true)) config->countdown_display = tuple->value->cstring[0]; 
   
@@ -169,7 +179,7 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgWeatherRefresh);
   if(tuple && (cfgChanged = true)) config->weather_refresh = tuple->value->int32;
   
-  return cfgChanged;
+  return cfgChanged && countdownIndex == config->countdown_count - 1; // Only finish changing the configuration once every countdown is received
 }
 
 void config_load() {
@@ -226,6 +236,9 @@ void config_load() {
   #if defined(PBL_COMPASS)
   config->compass_switcher_only = true;
   #endif
+  
+  config->countdown_count = 0;
+  config->countdowns = NULL;
 
   #if defined(PBL_HEALTH)
   config->health_stick = true;
@@ -252,13 +265,43 @@ void config_load() {
   config->weather_refresh = 30; 
   
   // Load settings from storage
-  if (persist_exists(STORAGE_CONFIG) && persist_get_size(STORAGE_CONFIG) <= (int)sizeof(actual_config)) {
-    // Read config from storage
-    persist_read_data(STORAGE_CONFIG, config, sizeof(actual_config));
+  if (persist_exists(STORAGE_CONFIG)) {
+    int storedSize = persist_get_size(STORAGE_CONFIG);
+    if (storedSize == (int)sizeof(struct Config)) {
+      // Read config from storage
+      persist_read_data(STORAGE_CONFIG, config, sizeof(struct Config));
+      
+      // Load countdowns from storage
+      int countdownsSize = sizeof(struct CountdownConfig) * config->countdown_count;
+      if (persist_exists(STORAGE_COUNTDOWNS) && persist_get_size(STORAGE_COUNTDOWNS) == countdownsSize) {   
+        config->countdowns = malloc(countdownsSize); 
+        persist_read_data(STORAGE_COUNTDOWNS, config->countdowns, countdownsSize);
+      } else {
+        config->countdown_count = 0;
+        config->countdowns = NULL;
+      }     
+    } else if (storedSize  == (int)sizeof(struct ConfigV15)) {
+      // Read config from storage and convert to current config format
+      struct ConfigV15 tempConfig;
+      persist_read_data(STORAGE_CONFIG, &tempConfig, sizeof(struct ConfigV15));
+      convert_config_v15(config, &tempConfig);
+    }
   }
 }
 
 void config_save() {
-  // Save the configuration
+  // Save configuration
   persist_write_data(STORAGE_CONFIG, config, sizeof(actual_config));
+  
+  // Save countdowns
+  if (config->countdown_count > 0) {
+    persist_write_data(STORAGE_COUNTDOWNS, config->countdowns, sizeof(struct CountdownConfig) * config->countdown_count);
+  } else if (persist_exists(STORAGE_COUNTDOWNS)) {
+    persist_delete(STORAGE_COUNTDOWNS);
+  }
+}
+
+void config_deinit() {
+  free(config->countdowns);
+  config->countdowns = NULL;
 }
