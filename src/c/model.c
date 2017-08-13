@@ -57,42 +57,26 @@ void model_set_time(struct tm *time, TimeUnits units_changed) {
   }
 }
 
-void model_set_weather_condition(enum WeatherCondition condition) {
+void model_set_weather(int temperature, enum WeatherCondition condition) {
+  model->weather_temperature = temperature;
   model->weather_condition = condition;
     
   if (model->update_req & UPDATE_WEATHER) {
-    if (model->events.on_weather_condition_change) {
-      model->events.on_weather_condition_change();
+    if (model->events.on_weather_change) {
+      model->events.on_weather_change();
     }
   }
 }
 
-void model_set_weather_temperature(int temperature) {
-  model->weather_temperature = temperature;
-    
-  if (model->update_req & UPDATE_WEATHER) {
-    if (model->events.on_weather_temperature_change) {
-      model->events.on_weather_temperature_change();
-    }
-  }
-}
-
-void model_set_sunrise(int sunrise) {
+void model_set_sun(int dawn, int sunrise, int sunset, int dusk) {
+  model->dawn = dawn;
   model->sunrise = sunrise;
-    
-  if (model->update_req & UPDATE_SUN) {
-    if (model->events.on_sunrise_change) {
-      model->events.on_sunrise_change();
-    }
-  }
-}
-
-void model_set_sunset(int sunset) {
   model->sunset = sunset;
+  model->dusk = dusk;
     
   if (model->update_req & UPDATE_SUN) {
-    if (model->events.on_sunset_change) {
-      model->events.on_sunset_change();
+    if (model->events.on_sun_change) {
+      model->events.on_sun_change();
     }
   }
 }
@@ -159,10 +143,11 @@ void model_set_moon(int moonphase, int moonillumination) {
   }
 }
 
-void model_set_altitude(int altitude) {
+void model_set_altitude(int altitude, int accuracy) {
   model->altitude = altitude;
+  model->altitude_accuracy = accuracy;
     
-  if (model->update_req & UPDATE_ALTITUDE) {
+  if (model->update_req & (UPDATE_ALTITUDE | UPDATE_ALTITUDE_CONTINUOUS)) {
     if (model->events.on_altitude_change) {
       model->events.on_altitude_change();
     }

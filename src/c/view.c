@@ -144,7 +144,8 @@ GSize calculate_total_size(GRect bounds, int text_count, char *texts[]) {
   
   for (int i = 0; i < text_count; ++i) {
     if (texts[i]) {
-      GSize text_size = graphics_text_layout_get_content_size(texts[i], i % 2 == 0 ? view.fonts.secondary : view.fonts.accent, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
+      GFont font = i % 2 == 0 ? view.fonts.secondary : view.fonts.accent;
+      GSize text_size = graphics_text_layout_get_content_size(texts[i], font, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft);
       result.w += text_size.w;
       result.h = text_size.h > result.h ? text_size.h : result.h;
     }
@@ -157,8 +158,9 @@ void draw_alternating_text(GContext *ctx, GRect bounds, int text_count, char *te
   for (int i = 0; i < text_count; ++i) {
     if (texts[i]) {
       // Draw the text
+      GColor color = i % 2 == 0 ? config->color_secondary : config->color_accent;
       GFont font = i % 2 == 0 ? view.fonts.secondary : view.fonts.accent;
-      graphics_context_set_text_color(ctx, i % 2 == 0 ? config->color_secondary : config->color_accent); // Alternate color
+      graphics_context_set_text_color(ctx, color); // Alternate color
       graphics_draw_text(ctx, texts[i], font, bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       
       // Shrink bounds to the right
@@ -242,45 +244,39 @@ void timezone_update_proc(Layer *layer, GContext *ctx) {
 }
 
 void altitude_update_proc(Layer *layer, GContext *ctx) { 
-  static char before_point[4];
-  static char after_point[4];
-  char **texts;
+  char altitude_before_point[4];
+  char* point = NULL;
+  char altitude_after_point[4] = { 0 };
+  char* plusmin = NULL;
+  char accuracy_text[4] = { 0 };
+  char* units;
   
-  int metric = model->altitude;
-  if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
-  if (metric < 1000) {
-    snprintf(before_point, sizeof(before_point), "%d", metric);
-    if (config->altitude_unit == 'M') {
-      static char *temp[] = { before_point,  "m", NULL, NULL };
-      texts = temp;
-    } else {
-      static char *temp[] = { before_point,  "ft", NULL, NULL };
-      texts = temp;
-    }
+  int altitude = model->altitude;
+  int accuracy = model->altitude_accuracy;
+  if (config->altitude_unit == 'I') {
+    altitude = altitude * 305 / 100;
+    accuracy = accuracy * 305 / 100;
+    units = "ft";
   } else {
-    snprintf(before_point, sizeof(before_point), "%d", metric / 1000);
-    snprintf(after_point, sizeof(after_point), "%03d", metric % 1000);
-    if (config->altitude_unit == 'M') {
-      if (config->health_number_format == 'M') {
-        static char *temp[] = { before_point, ",", after_point, "m" };
-        texts = temp;
-      } else {
-        static char *temp[] = { before_point, ".", after_point, "m" };
-        texts = temp;
-      }
-    } else {
-      if (config->health_number_format == 'M') {
-        static char *temp[] = { before_point, ",", after_point, "ft" };
-        texts = temp;
-      } else {
-        static char *temp[] = { before_point, ".", after_point, "ft" };
-        texts = temp;
-      }
-    }
-  }  
+    units = "m";
+  }
   
+  if (altitude < 1000000) {
+    snprintf(altitude_before_point, sizeof(altitude_before_point), "%d", altitude / 1000);
+  } else {
+    snprintf(altitude_before_point, sizeof(altitude_before_point), "%d", altitude / (1000 * 1000));
+    point = config->health_number_format == 'M' ? "." : ",";
+    snprintf(altitude_after_point, sizeof(altitude_after_point), "%03d", (altitude % (1000 * 1000)) / 1000);
+  } 
+  
+  if (config->altitude_show_accuracy) {
+    plusmin = "±";
+    snprintf(accuracy_text, sizeof(accuracy_text), "%d", accuracy / 1000);
+  }
+    
   // Draw
-  draw_centered(layer, ctx, ICON_ALTITUDE, config->color_secondary, 4, texts);
+  char *texts[] = { altitude_before_point, point, altitude_after_point, plusmin, accuracy_text, units };
+  draw_centered(layer, ctx, ICON_ALTITUDE, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
 }
 
 void battery_update_proc(Layer *layer, GContext *ctx) {
@@ -362,7 +358,7 @@ static long ymd_to_days (int yr, int mo, int day) {
   long scalar;
 
   scalar = day + months_to_days(mo);
-  if (mo > 2) /* adjust if past February */
+  if (mo > 2) // adjust if past February 
     scalar -= is_leap(yr) ? 1 : 2;
   yr--;
   scalar += years_to_days(yr);
@@ -593,7 +589,7 @@ void error_update_proc(Layer *layer, GContext *ctx) {
       break; 
     case ERROR_LOCATION:
       symbol = ICON_NO_LOCATION;
-      text = "No location";
+      text = "Location n/a";
       break; 
     case ERROR_WEATHER:
       symbol = ICON_NO_WEATHER;
@@ -602,6 +598,10 @@ void error_update_proc(Layer *layer, GContext *ctx) {
     case ERROR_VIBRATION_OVERLOAD:
       symbol = ICON_VIBRATION_OVERLOAD;
       text = " Switcher pause";
+      break; 
+    case ERROR_ALTITUDE:
+      symbol = ICON_NO_LOCATION;
+      text = "Altitude n/a";
       break; 
     default:
       // Bluetooth ok once again alert
@@ -1001,12 +1001,12 @@ char** health_generate_texts(enum HealthIndicator indicator) {
       break;
     case HEALTH_CLIMB_DESCEND:
       metric = model->activity_climb;
-      if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
-      result[0] = alloc_print_d("%d", metric);
+      if (config->altitude_unit == 'I') metric = metric * 305 / 100;
+      result[0] = alloc_print_d("%d", metric / 1000);
       result[1] = alloc_print_s("|");
       metric = model->activity_descend;
-      if (config->altitude_unit == 'I') metric = metric * 3048 / 1000;
-      result[2] = alloc_print_d("%d", metric);
+      if (config->altitude_unit == 'I') metric = metric * 305 / 100;
+      result[2] = alloc_print_d("%d", metric / 1000);
       result[3] = alloc_print_s(config->altitude_unit == 'M' ? "m" : "ft");
       break;
     #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
@@ -1147,14 +1147,24 @@ void weather_update_proc(Layer *layer, GContext *ctx) {
 void sunrise_sunset_update_proc(Layer *layer, GContext *ctx) {
   bool daytime = is_daytime();
   char* symbol = daytime ? ICON_SUNSET : ICON_SUNRISE; 
+  char* duskdawn = NULL;
   char hour[3];
   char minute[3];
   snprintf(hour, sizeof(hour), "%d", (daytime ? model->sunset : model->sunrise) / 60);
   snprintf(minute, sizeof(minute), "%02d", (daytime ? model->sunset : model->sunrise) % 60);
   
+  // Is it dusk or dawn?
+  int minutes = model->time->tm_hour * 60 + model->time->tm_min;
+  if (minutes >=  model->dawn && minutes < model->sunrise) {
+    duskdawn = " Dawn";
+  } else if (minutes > model->sunset && minutes <= model->dusk) {
+    duskdawn = " Dusk";
+  }
+  
   // Draw
-  char *texts[] = { " ", NULL, hour, ":", minute}; 
-  draw_centered(layer, ctx, symbol, config->color_secondary, sizeof(texts) / sizeof(texts[0]), texts);
+  char *middle_texts[] = { duskdawn, NULL }; 
+  char *bottom_texts[] = { " ", NULL, hour, ":", minute}; 
+  draw_multi_centered(layer, ctx, symbol, config->color_secondary, 0, NULL, sizeof(middle_texts) / sizeof(middle_texts[0]), middle_texts, sizeof(bottom_texts) / sizeof(bottom_texts[0]), bottom_texts);
 }
 
 void date_update_proc(Layer *layer, GContext *ctx, char* format) {
@@ -1345,12 +1355,12 @@ void alternating_layers_show(int index) {
       layer_add_child(window_layer, view.alt_layers[index]);
     }
     
-    view.alt_layer_visible = index;
-    
     // Rotate through countdowns
     if (view.alt_layers[view.alt_layer_visible] == view.layers.countdown) {
       view.countdownIndex = (view.countdownIndex + 1) % config->countdown_count;
     }
+    
+    view.alt_layer_visible = index;
   }
 }
 
@@ -1531,20 +1541,24 @@ void time_changed(TimeUnits units_changed) {
 }
 
 void evaluate_altitude_req() {
-  if (config->enable_altitude 
 #if defined(PBL_HEALTH)
-      || (model->activity == ACTIVITY_WALK && (config->health_walk_top == HEALTH_CLIMB_DESCEND || config->health_walk_middle == HEALTH_CLIMB_DESCEND || config->health_walk_bottom == HEALTH_CLIMB_DESCEND)) 
-      || (model->activity == ACTIVITY_RUN && (config->health_run_top == HEALTH_CLIMB_DESCEND || config->health_run_middle == HEALTH_CLIMB_DESCEND || config->health_run_bottom == HEALTH_CLIMB_DESCEND)) 
+  if ((model->activity == ACTIVITY_WALK && (config->health_walk_top == HEALTH_CLIMB_DESCEND || config->health_walk_middle == HEALTH_CLIMB_DESCEND || config->health_walk_bottom == HEALTH_CLIMB_DESCEND)) 
+      || (model->activity == ACTIVITY_RUN && (config->health_run_top == HEALTH_CLIMB_DESCEND || config->health_run_middle == HEALTH_CLIMB_DESCEND || config->health_run_bottom == HEALTH_CLIMB_DESCEND))) {
+    model_add_update_req(UPDATE_ALTITUDE_CONTINUOUS);
+    model_remove_update_req(UPDATE_ALTITUDE);
+  } else       
 #endif
-     ) {
+  if (config->enable_altitude) {
+    model_remove_update_req(UPDATE_ALTITUDE_CONTINUOUS);
     model_add_update_req(UPDATE_ALTITUDE);
   } else {
+    model_remove_update_req(UPDATE_ALTITUDE_CONTINUOUS);
     model_remove_update_req(UPDATE_ALTITUDE);
   }
 }
 
 void altitude_changed() {
-  if (view.layers.altitude == NULL) {
+  if (config->enable_altitude && view.layers.altitude == NULL) {
     // Create altitude layer
     view.layers.altitude = alternating_layers_create(altitude_update_proc, ICON_ALTITUDE);
   }   
@@ -1594,10 +1608,14 @@ void weather_changed() {
 }
 
 void sunrise_sunset_changed() {
-  if (view.layers.sunrise_sunset == NULL) {
+  // As sunset/sunrise information is also for moonphase, check whether sunrise sunset layer is wanted
+  if (config->enable_sun && view.layers.sunrise_sunset == NULL) {
     // Create sunrise layer
     view.layers.sunrise_sunset = alternating_layers_create(sunrise_sunset_update_proc, ICON_SUNRISE);
   }
+  
+  // Check visibility of moonphase based on day or night time
+  if (config->enable_moonphase) evaluate_moonphase_req();
 }
 
 #if defined(PBL_HEALTH)
@@ -1641,7 +1659,7 @@ void evaluate_moonphase_req() {
 void moonphase_changed() {
   if (view.layers.moonphase == NULL) {
     // Create moonphase layer
-    view.layers.moonphase = alternating_layers_create(moonphase_update_proc, icons_get_moonphase(120));
+    view.layers.moonphase = alternating_layers_create(moonphase_update_proc, icons_get_moonphase(65));
   } 
 }
 
@@ -1711,7 +1729,7 @@ void flicked() {
     
     // Deactivate switcher after 30sec
     if (view.switcher_timeout_timer) app_timer_cancel(view.switcher_timeout_timer);
-    view.switcher_timeout_timer = app_timer_register(30000, switcher_timeout_callback, NULL);
+    view.switcher_timeout_timer = app_timer_register(15000, switcher_timeout_callback, NULL);
     
     // Create compass layer depending on configuration
     #if defined(PBL_COMPASS)
@@ -1743,7 +1761,7 @@ void tapped() {
     }
   
     // Prolong switcher
-    if (view.switcher_timeout_timer) app_timer_reschedule(view.switcher_timeout_timer, 30000);
+    if (view.switcher_timeout_timer) app_timer_reschedule(view.switcher_timeout_timer, 15000);
   }
 }
 
@@ -1965,13 +1983,11 @@ void view_init() {
   compass_enable_changed();
   #endif
   if (config->enable_weather) {
-    model->events.on_weather_temperature_change = &weather_changed;
-    model->events.on_weather_condition_change = &weather_changed;
+    model->events.on_weather_change = &weather_changed;
     model_add_update_req(UPDATE_WEATHER);
   }
   if (config->enable_sun) {
-    model->events.on_sunrise_change = &sunrise_sunset_changed;
-    model->events.on_sunset_change = &sunrise_sunset_changed;
+    model->events.on_sun_change = &sunrise_sunset_changed;
     model_add_update_req(UPDATE_SUN);
   }
   #if defined(PBL_HEALTH)
@@ -1982,7 +1998,8 @@ void view_init() {
   #endif
   if (config->enable_moonphase) {
     model->events.on_moonphase_change = &moonphase_changed;
-    evaluate_moonphase_req();
+    // Moonphase is first initiated from sunrise_sunset_changed
+    model_add_update_req(UPDATE_SUN);
   }
   
   // Create non-model update based alternating layers
@@ -2016,14 +2033,6 @@ void view_init() {
 }
 
 void view_deinit() {  
-  // Stop animations
-  switcher_animation_teardown(view.switcher_animation);
-  fireworks_animation_teardown(NULL);
-    
-  // Stop timers
-  if (view.alert_timeout_handler) app_timer_cancel(view.alert_timeout_handler);
-  if (view.switcher_timeout_timer) app_timer_cancel(view.switcher_timeout_timer);
-  
   // Unregister from model events
   model_remove_update_req(~0); // Remove all requirements
   model_reset_events();

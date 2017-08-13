@@ -27,7 +27,8 @@ enum ErrorCodes {
   ERROR_FETCH,
   ERROR_LOCATION,
   ERROR_WEATHER,
-  ERROR_VIBRATION_OVERLOAD
+  ERROR_VIBRATION_OVERLOAD,
+  ERROR_ALTITUDE,
 };
 
 enum Activities {
@@ -71,22 +72,21 @@ enum ModelUpdates {
   UPDATE_FLICKS = 1 << 1,
   UPDATE_TAPS = 1 << 2,
   UPDATE_ALTITUDE = 1 << 3,
-  UPDATE_COMPASS = 1 << 4,
-  UPDATE_MOONPHASE = 1 << 5,
-  UPDATE_WEATHER = 1 << 6,
-  UPDATE_SUN = 1 << 7,
-  UPDATE_BATTERY = 1 << 8,
-  UPDATE_HEALTH = 1 << 9,
+  UPDATE_ALTITUDE_CONTINUOUS = 1 << 4,
+  UPDATE_COMPASS = 1 << 5,
+  UPDATE_MOONPHASE = 1 << 6,
+  UPDATE_WEATHER = 1 << 7,
+  UPDATE_SUN = 1 << 8,
+  UPDATE_BATTERY = 1 << 9,
+  UPDATE_HEALTH = 1 << 10,
 };
 
 struct ModelEvents {
   void (*on_update_req_change)(enum ModelUpdates prev_req);
   void (*on_error_change)(enum ErrorCodes prevError);
   void (*on_time_change)(TimeUnits units_changed);
-  void (*on_weather_condition_change)();
-  void (*on_weather_temperature_change)();
-  void (*on_sunrise_change)();
-  void (*on_sunset_change)();
+  void (*on_weather_change)();
+  void (*on_sun_change)();
   void (*on_battery_change)();
   #if defined(PBL_COMPASS)
   void (*on_compass_heading_change)();
@@ -108,8 +108,10 @@ struct Model {
   struct tm *time;
   enum WeatherCondition weather_condition;
   int weather_temperature;
+  int dawn;
   int sunrise;
   int sunset;
+  int dusk;
   #if defined(PBL_COMPASS)
   CompassHeadingData compass_heading;
   #endif
@@ -128,6 +130,7 @@ struct Model {
   int moonphase;
   int moonillumination;
   int altitude;
+  int altitude_accuracy;
   
   struct ModelEvents events;
 };
@@ -138,10 +141,8 @@ void model_reset_events();
 
 void model_set_error(enum ErrorCodes error);
 void model_set_time(struct tm *tick_time, TimeUnits units_changed);
-void model_set_weather_condition(enum WeatherCondition condition);
-void model_set_weather_temperature(int weather_temperature);
-void model_set_sunrise(int sunrise);
-void model_set_sunset(int sunset);
+void model_set_weather(int weather_temperature, enum WeatherCondition condition);
+void model_set_sun(int dawn, int sunrise, int sunset, int dusk);
 void model_set_battery(uint8_t charge, bool charging, bool plugged);
 #if defined(PBL_COMPASS)
 void model_set_compass_heading(CompassHeadingData compass_heading);
@@ -151,7 +152,7 @@ void model_set_activity(enum Activities activity);
 void model_set_activity_counters(int calories, int duration, int distance, int step_count, int climb, int descend);
 #endif
 void model_set_moon(int moonphase, int moonillumination);
-void model_set_altitude(int altitude);
+void model_set_altitude(int altitude, int accuracy);
 
 void model_signal_flick();
 void model_signal_tap();

@@ -16,7 +16,7 @@
         "messageKeys": [
             "JSReady",
             "Err",
-            "Fetch",
+            "FetchWeather",
             "Temperature",
             "Condition",
             "Sunrise",
@@ -94,7 +94,14 @@
             "cfgFontLarge",
             "SleepTrust",
             "cfgCountdownCount",
-            "cfgCountdownIndex"
+            "cfgCountdownIndex",
+            "AltitudeAccuracy",
+            "cfgAltitudeShowAccuracy",
+            "FetchSun",
+            "Dawn",
+            "Dusk",
+            "FetchAltitude",
+            "cfgAltitudeRefresh"
         ],
         "projectType": "native",
         "resources": {

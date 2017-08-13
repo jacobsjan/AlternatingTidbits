@@ -12,12 +12,63 @@ static MessageQueue* message_queue = NULL;
 bool js_ready = false;
 static bool sending = false;
 
+void merge_messages() {
+  // Count number of tuplets
+  int new_count = 0;
+  MessageQueue* old_queue = message_queue;
+  while(old_queue) {
+    new_count += old_queue->tuplet_count;
+    old_queue = old_queue->next;
+  }
+  
+  // Allocate space for all tuplets
+  MessageQueue* new_queue = malloc(sizeof(MessageQueue) + new_count * sizeof(Tuplet));
+  
+  // Merge items
+  if (new_queue) {
+    new_count = 0;
+    old_queue = message_queue;
+    while (old_queue) {
+      // Merge keys of this message in the old queue
+      for (int old_i = 0; old_i < old_queue->tuplet_count; old_i++) {
+        // Is this key allready in the new message?
+        for (int new_i = 0; new_i < new_count; new_i++) {
+          if (old_queue->tuplets[old_i].key == new_queue->tuplets[new_i].key) {
+            // Duplicate key, replace with latest value
+            memcpy(&new_queue->tuplets[new_i], &old_queue->tuplets[old_i], sizeof(Tuplet));
+            break;
+          }
+        }
+        
+        // New key, no duplicate found
+        memcpy(&new_queue->tuplets[new_count], &old_queue->tuplets[old_i], sizeof(Tuplet));
+        new_count += 1;
+      }
+      
+      // On to the next item in the old queue, free previous message
+      MessageQueue* freeable = old_queue;
+      old_queue = old_queue->next;
+      free(freeable);
+    }
+    
+    new_queue->tuplet_count = new_count;
+    new_queue->next = NULL;   
+      
+    // Replace with new queue
+    message_queue = new_queue;
+  }
+}
+
 void message_queue_js_is_ready() {
   js_ready = true;
 }
 
 void message_queue_send_next() {
   if (message_queue && js_ready && !sending) {
+    // Merge messages into one
+    if (message_queue->next) merge_messages();
+    
+    // Prepare dictionary to send
     DictionaryIterator *iter;
     if(app_message_outbox_begin(&iter) == APP_MSG_OK) {
       sending = true;

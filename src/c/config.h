@@ -49,6 +49,8 @@ struct Config {
   int timezone_offset;
   char timezone_city[20];
   
+  bool altitude_show_accuracy;
+  int altitude_refresh;
   char altitude_unit;
   
   int battery_show_from;

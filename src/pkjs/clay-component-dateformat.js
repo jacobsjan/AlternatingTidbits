@@ -65,7 +65,9 @@ module.exports = {
     
     // Ignore clicks on the popup
     var $popup = $popupoverlay.select('.dateformat-popup');        
-    $popup.on('click', function() {  });
+    $popup.on('click', function() {  });    
+    $popup.on('touchmove', function(e) { return true; }); //e.stopPropagation(); });    
+    //$popupoverlay.on('touchmove', function(e) { e.preventDefault(); });    
     
     // Show popup when component is clicked
     var $popupButton = $elem.select('label'); 

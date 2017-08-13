@@ -9,8 +9,11 @@
 #include "storage.h"
 #include "messagequeue.h"
 
-#define FETCH_RETRIES 5
-int weather_fetch_countdown = 0;
+AppTimer* altitude_fetch_timer = NULL;
+AppTimer* moonphase_fetch_timer = NULL;
+AppTimer* sun_fetch_timer = NULL;
+AppTimer* weather_fetch_timer = NULL;
+
 AppTimer* vibration_overload_timer = NULL;
 AppTimer* accel_unsubscribe_timer = NULL;
 bool tapping = false;
@@ -39,74 +42,55 @@ int altitude_climb = 0;
 int altitude_descend = 0;
 #endif
 
-static bool fetch_weather() {
-  // Check configuration of weather/sunrise/sunset and sleeping
-  if ((model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) && !is_asleep()) {
-    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fetch, 1));    
-    return true;
-  } else {
-    // Did not fetch weather
-    return false;
-  }
-}
-
-static bool fetch_moonphase() {  
-  // Check configuration of moonphase, bluetooth connection
-  if (model->update_req & UPDATE_MOONPHASE) {
-    message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchMoonphase, 1));    
-    return true;
-  } else {
-    // Did not fetch moonphase
-    return false;
-  }
-}
-
 static void msg_received_handler(DictionaryIterator *iter, void *context) {
   // Handle and incoming message from the phone
   Tuple *tuple = dict_find(iter, MESSAGE_KEY_JSReady);
   if(tuple) {
-    message_queue_js_is_ready();
-    
-    // Watch is ready for communication, is weather fetch wanted?  
-    fetch_weather();
-    
-    // Is moonphase fetch wanted?
-    fetch_moonphase();
+    // Submit or resubmit info after phone app restart
+    // Signal the availability of a heartrate sensor
+    #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
+    if (is_heartrate_available()) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_HeartrateAvailable, 1));
+    #endif
     
     // Subscribe to altitude
-    if (model->update_req & UPDATE_ALTITUDE) altitude_req_changed(true);
-        
-    // Signal that a heartrate sensor is available
-    #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
-    if (is_heartrate_available()) {
-        message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_HeartrateAvailable, 1));
-    } 
-    #endif
+    if (model->update_req & UPDATE_ALTITUDE_CONTINUOUS) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SubscribeAltitude, 1));  
+    
+    // Inform messagequeue app is ready to receive messages
+    message_queue_js_is_ready();
   }
   
   // Weather
-  bool wtrChanged = false;    
+  bool weatherChanged = false;    
+  int temperature = 0;
+  int condition = 0;
   tuple = dict_find(iter, MESSAGE_KEY_Temperature);
-  if(tuple && (wtrChanged = true)) {
-    model_set_weather_temperature(tuple->value->int32);
-    
-    // Weather fetch was succesfull, reset fetch countdown
-    weather_fetch_countdown = config->weather_refresh;
-    
-  }
+  if(tuple && (weatherChanged = true)) temperature = tuple->value->int32;
   tuple = dict_find(iter, MESSAGE_KEY_Condition);
-  if(tuple && (wtrChanged = true)) model_set_weather_condition(tuple->value->int32);
+  if(tuple && (weatherChanged = true)) condition = tuple->value->int32;
+  if (weatherChanged) model_set_weather(temperature, condition);
+    
+  // Sunrise/sunset
+  bool sunChanged = false;
+  int dawn = 0;
+  int sunset = 0;
+  int sunrise = 0;
+  int dusk = 0;
+  tuple = dict_find(iter, MESSAGE_KEY_Dawn);
+  if(tuple && (sunChanged = true)) dawn = tuple->value->int32;
   tuple = dict_find(iter, MESSAGE_KEY_Sunrise);
-  if(tuple && (wtrChanged = true)) model_set_sunrise(tuple->value->int32);
+  if(tuple && (sunChanged = true)) sunrise = tuple->value->int32;
   tuple = dict_find(iter, MESSAGE_KEY_Sunset);
-  if(tuple && (wtrChanged = true)) model_set_sunset(tuple->value->int32);
+  if(tuple && (sunChanged = true)) sunset = tuple->value->int32;
+  tuple = dict_find(iter, MESSAGE_KEY_Dusk);
+  if(tuple && (sunChanged = true)) dusk = tuple->value->int32;
+  if (sunChanged) model_set_sun(dawn, sunrise, sunset, dusk);
   
   // Error
   tuple = dict_find(iter, MESSAGE_KEY_Err);
   if(tuple) {
     // Error encountered
     model_set_error(tuple->value->int32);
-  } else if (wtrChanged) {
+  } else {
     // Reset error if necessary
     if (model->error != ERROR_NONE) {
       model_set_error(ERROR_NONE);
@@ -126,18 +110,22 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
   // Altitude 
   tuple = dict_find(iter, MESSAGE_KEY_Altitude);
   if(tuple) {
-    int altitude = tuple->value->int32;
+    int altitude = tuple->value->int32;    
+    tuple = dict_find(iter, MESSAGE_KEY_AltitudeAccuracy);
+    if(tuple) {
+      int altitudeAccuracy = tuple->value->int32;
 #if defined(PBL_HEALTH)
-    if (model->altitude != INT_MIN) {
-      if (altitude > model->altitude) 
-      {
-          altitude_climb += altitude - model->altitude;
-      } else {
-          altitude_descend += model->altitude - altitude;
+      if (model->altitude != INT_MIN) {
+        if (altitude > model->altitude) 
+        {
+            altitude_climb += altitude - model->altitude;
+        } else {
+            altitude_descend += model->altitude - altitude;
+        }
       }
-    }
-#endif    
-    model_set_altitude(altitude);
+#endif   
+      model_set_altitude(altitude, altitudeAccuracy);
+    } 
   }
   
   // Configuration
@@ -159,10 +147,6 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     // Restart view  
     view_deinit();
     view_init();
-    
-    // Refetch weather and moonphase in case settings were changed
-    fetch_weather();
-    fetch_moonphase();
     
     // Save configuration
     config_save();
@@ -368,24 +352,6 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     // Send unsent messages
     message_queue_send_next();
     
-    // Update weather and sunset/sunrise
-    if (model->update_req & (UPDATE_WEATHER | UPDATE_SUN)) {
-      weather_fetch_countdown--;
-      if (weather_fetch_countdown <= -FETCH_RETRIES) {
-        // Ran out of retries, weather fetch failed
-        model_set_error(ERROR_FETCH);   
-        
-        // Reset fetch countdown
-        weather_fetch_countdown = config->weather_refresh;
-      } else if (weather_fetch_countdown <= 0) {
-        // Fetch weather
-        if (!fetch_weather()) {
-          // Fetching the weather was not tried, suspend countdown
-          weather_fetch_countdown++;
-        }      
-      }
-    }
-    
     // Update health
     #if defined(PBL_HEALTH)
     if (model->update_req & UPDATE_HEALTH) update_health();
@@ -397,9 +363,6 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     if (!should_keep_quiet() && config->vibrate_hourly) {
       vibes_short_pulse();
     }
-    
-    // Refresh moonphase if required
-    fetch_moonphase();
   }
       
   // Update the displayed time
@@ -570,12 +533,84 @@ void compass_req_changed(bool required) {
 }
 #endif
 
+void fetch_altitude(void *initialized) {  
+  // Do not refetch when sleeping except on initial call
+  if (!is_asleep() || !initialized) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchAltitude, 1));  
+
+  // Schedule new fetch
+  if (altitude_fetch_timer && !initialized) app_timer_cancel(altitude_fetch_timer);
+  altitude_fetch_timer = app_timer_register(config->altitude_refresh * SECONDS_PER_MINUTE * 1000, fetch_altitude, (void*)-1);  
+}
+
 void altitude_req_changed(bool required) {
+  if (required) {
+    fetch_altitude(NULL);
+  } else if (altitude_fetch_timer) {
+    app_timer_cancel(altitude_fetch_timer);
+    altitude_fetch_timer = NULL;
+  }
+}
+
+void altitude_continuous_req_changed(bool required) {
   if (required) {
     model->altitude = INT_MIN;
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SubscribeAltitude, 1));      
   } else {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_UnsubscribeAltitude, 1));       
+  }
+}
+
+void fetch_moonphase(void *initialized) {  
+  // Do not refetch when sleeping except on initial call
+  if (!is_asleep() || !initialized) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchMoonphase, 1));  
+
+  // Schedule new fetch
+  if (moonphase_fetch_timer && !initialized) app_timer_cancel(moonphase_fetch_timer);
+  moonphase_fetch_timer = app_timer_register(SECONDS_PER_HOUR * 1000, fetch_moonphase, (void*)-1);  
+}
+
+void moonphase_req_changed(bool required) {
+  if (required) {
+    fetch_moonphase(NULL);
+  } else if (moonphase_fetch_timer) {
+    app_timer_cancel(moonphase_fetch_timer);
+    moonphase_fetch_timer = NULL;
+  }
+}
+
+void fetch_sun(void *initialized) {
+  // Do not refetch when sleeping except on initial call
+  if (!is_asleep() || !initialized) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchSun, 1));  
+
+  // Schedule new fetch
+  if (sun_fetch_timer && !initialized) app_timer_cancel(sun_fetch_timer);
+  sun_fetch_timer = app_timer_register(SECONDS_PER_HOUR * 1000, fetch_sun, (void*)-1);
+}
+
+void sun_req_changed(bool required) {
+  if (required) {
+    fetch_sun(NULL);
+  } else if (sun_fetch_timer) {
+    app_timer_cancel(sun_fetch_timer);
+    sun_fetch_timer = NULL;
+  }
+}
+
+void fetch_weather(void *initialized) {
+  // Do not refetch when sleeping except on initial call
+  if (!is_asleep() || !initialized) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchWeather, 1));  
+  
+  // Schedule new fetch
+  if (weather_fetch_timer && !initialized) app_timer_cancel(weather_fetch_timer);
+  weather_fetch_timer = app_timer_register(config->weather_refresh * SECONDS_PER_MINUTE * 1000, fetch_weather, (void*)-1);
+}
+
+void weather_req_changed(bool required) {
+  if (required) {
+    fetch_weather(NULL);
+  } else if (weather_fetch_timer) {
+    app_timer_cancel(weather_fetch_timer);
+    weather_fetch_timer = NULL;
   }
 }
 
@@ -589,9 +624,11 @@ void update_requirements_changed(enum ModelUpdates prev_req) {
   if (changes & UPDATE_COMPASS) compass_req_changed(model->update_req & UPDATE_COMPASS);
   #endif
   if (changes & UPDATE_ALTITUDE) altitude_req_changed(model->update_req & UPDATE_ALTITUDE);
-  if (changes & UPDATE_MOONPHASE) fetch_moonphase();
-  if (changes & UPDATE_WEATHER || changes & UPDATE_SUN) fetch_moonphase();
+  if (changes & UPDATE_ALTITUDE_CONTINUOUS) altitude_continuous_req_changed(model->update_req & UPDATE_ALTITUDE_CONTINUOUS);
+  if (changes & UPDATE_MOONPHASE) moonphase_req_changed(model->update_req & UPDATE_MOONPHASE);
   if (changes & UPDATE_BATTERY) battery_req_changed(model->update_req & UPDATE_BATTERY);
+  if (changes & UPDATE_WEATHER) weather_req_changed(model->update_req & UPDATE_WEATHER);
+  if (changes & UPDATE_SUN) sun_req_changed(model->update_req & UPDATE_SUN);
 }
 
 static void app_init() {     
@@ -637,10 +674,7 @@ static void app_init() {
   });
 }
 
-static void app_deinit() {
-  // Stop timers
-  if (vibration_overload_timer) app_timer_cancel(vibration_overload_timer);
-  
+static void app_deinit() {  
   // Unsubscribe from services
   connection_service_unsubscribe();
   app_message_deregister_callbacks();

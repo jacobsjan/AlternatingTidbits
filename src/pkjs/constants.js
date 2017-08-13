@@ -5,6 +5,8 @@ module.exports = {
   FETCH_ERROR: 2,
   LOCATION_ERROR: 3,
   WEATHER_ERROR: 4,
+  VIBRATION_OVERLOAD: 5,
+  ALTITUDE_ERROR: 6,
 
   //Conditions
   CLEAR: 0,

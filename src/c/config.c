@@ -92,6 +92,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   if(tuple && (cfgChanged = true)) strncpy(config->timezone_city, tuple->value->cstring, sizeof(config->timezone_city));  
   
   // Altitude
+  tuple = dict_find(iter, MESSAGE_KEY_cfgAltitudeShowAccuracy);
+  if(tuple && (cfgChanged = true)) config->altitude_show_accuracy = tuple->value->int8;
+  tuple = dict_find(iter, MESSAGE_KEY_cfgAltitudeRefresh);
+  if(tuple && (cfgChanged = true)) config->altitude_refresh = tuple->value->int32;  
   tuple = dict_find(iter, MESSAGE_KEY_cfgAltitudeUnits);
   if(tuple && (cfgChanged = true)) config->altitude_unit = tuple->value->cstring[0]; 
   
@@ -203,7 +207,10 @@ void config_load() {
   config->vibrate_bluetooth = true;
   config->vibrate_hourly = false;
 
+  config->altitude_show_accuracy = false;
+  config->altitude_refresh = 30;
   config->altitude_unit = 'M';
+  
   config->health_number_format = 'M';
   #if defined(PBL_HEALTH)
   config->health_distance_unit = 'M';

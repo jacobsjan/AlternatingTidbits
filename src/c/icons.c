@@ -113,7 +113,7 @@ char* icons_get_compass(int degrees) {
 #endif
 
 char* icons_get_moonphase(int degrees) {
-  int phase = ((360 + 180 - degrees + 6) % 360) * 28 / 360;
+  int phase = degrees * 28 / 360;
   switch(phase) {
     case  1: return "\uf0c5";
     case  2: return "\uf0c6";

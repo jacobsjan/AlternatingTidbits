@@ -6,12 +6,12 @@ try{
 }
 
 var MessageQueue = require('./libs/js-message-queue');
-var WeatherMan = require('./libs/weather-man');
 var constants = require('./constants');
 var Analytics = require('./libs/analytics.js');
 var keys = require('message_keys');
 var lastSubmittedAltitude = Number.MIN_VALUE;
-var altitudeSubscription = false;
+var lastSubmittedAltitudeAccuracy = Number.MIN_VALUE;
+var altitudeWatchId;
 var heartrateAvailable = false;
 var analytics = null;
 
@@ -239,24 +239,20 @@ Pebble.addEventListener('ready', function(e) {
 Pebble.addEventListener('appmessage', function(e) {
   try {
     console.log('Received message: ' + JSON.stringify(e.payload));
-    if (e.payload.Fetch) {
-      fetchLocation();
-    } else if (e.payload.FetchMoonphase) {
-      fetchMoonphase();
-    } else if (e.payload.SubscribeAltitude) {
-      // Look up altitude every 60 seconds 
-      fetchAltitude();
-      altitudeSubscription = window.setInterval(fetchAltitude, 60000);  
-    } else if (e.payload.UnsubscribeAltitude) {
-      window.clearInterval(altitudeSubscription);
+    if (e.payload.FetchWeather) fetchLocation(fetchWeather);
+    if (e.payload.FetchSun) fetchLocation(fetchSun);
+    if (e.payload.FetchMoonphase) fetchMoonphase();
+    if (e.payload.FetchAltitude) fetchAltitude(); 
+    if (e.payload.SubscribeAltitude) {
       lastSubmittedAltitude = Number.MIN_VALUE;
-    } else if (e.payload.HeartrateAvailable) {
-      heartrateAvailable = true;
-    } else if (e.payload.Exception) {
-      analytics.trackException("C crash in zone " + e.payload.Exception + ".");
-    } else if (e.payload.Fireworks) {
-      analytics.trackEvent('watchface', 'Fireworks');
-    } else if (e.payload.SleepTrust) {
+      lastSubmittedAltitudeAccuracy = Number.MIN_VALUE;
+      altitudeWatchId = navigator.geolocation.watchPosition(processAltitude, failedAltitude);
+    } 
+    if (e.payload.UnsubscribeAltitude) navigator.geolocation.clearWatch(altitudeWatchId);
+    if (e.payload.HeartrateAvailable) heartrateAvailable = true;
+    if (e.payload.Exception) analytics.trackException("C crash in zone " + e.payload.Exception + ".");
+    if (e.payload.Fireworks) analytics.trackEvent('watchface', 'Fireworks');
+    if (e.payload.SleepTrust) {
       if (e.payload.SleepTrust == 1) {
         analytics.trackEvent('watchface', 'Sleep not trusted');
       } else if (e.payload.SleepTrust == 2) { 
@@ -273,28 +269,64 @@ Pebble.addEventListener('appmessage', function(e) {
   pingAnalytics();
 });
 
+function processAltitude(position) {
+  // Was an altitude provided?
+  if (!position.coords.altitude) {
+    failedAltitude( {
+      code: 0,
+      message: "Altitude not available."
+    });
+    return;
+  }
+  
+  // Succes, got location
+  var currentAltitude = position.coords.altitude;
+  var currentAccuracy = position.coords.altitudeAccuracy;
+
+  // Validate that the altitude has changed before sending it to the watch
+  if (Math.abs(currentAltitude - lastSubmittedAltitude) > currentAccuracy + lastSubmittedAltitudeAccuracy) {
+    console.log('Altitude: ' + position.coords.altitude + 'm (accuracy ' + position.coords.altitudeAccuracy + 'm)');
+    
+    lastSubmittedAltitude = currentAltitude;
+    lastSubmittedAltitudeAccuracy = currentAccuracy;
+    sendMessage({
+      'Altitude': Math.round(currentAltitude * 1000),
+      'AltitudeAccuracy': Math.round(currentAccuracy * 1000)
+    });
+  }
+}
+
 function fetchAltitude() {
-  navigator.geolocation.getCurrentPosition( function (position) {
-      // Succes, got location
-      var currentAltitude = position.coords.altitude;
-      
-      // Validate that the altitude has changed before sending it to the watch
-      if (Math.abs(currentAltitude - lastSubmittedAltitude) > position.coords.altitudeAccuracy) {
-        lastSubmittedAltitude = currentAltitude;
-        sendMessage({
-          'Altitude': Math.round(currentAltitude)
+  navigator.geolocation.getCurrentPosition( function(position) {
+      // Was an altitude provided?
+      if (!position.coords.altitude) {
+        failedAltitude( {
+          code: 0,
+          message: "Altitude not available."
         });
+        return;
       }
-    }, function(err) {
-        console.warn('location error: ' + err.code + ' - ' + err.message); 
-        sendMessage({
-          'Err': constants.LOCATION_ERROR,
-        });    
-    }, { 
+    
+      var currentAltitude = position.coords.altitude;
+      var currentAccuracy = position.coords.altitudeAccuracy;
+      console.log('Altitude: ' + position.coords.altitude + 'm (accuracy ' + position.coords.altitudeAccuracy + 'm)');
+    
+      sendMessage({
+        'Altitude': Math.round(currentAltitude * 1000),
+        'AltitudeAccuracy': Math.round(currentAccuracy * 1000)
+      });
+    } , failedAltitude , { 
       enableHighAccuracy: true,
-      maximumAge: 0,
+      maximumAge: 300000,
       timeout: 59000
     } );
+}
+
+function failedAltitude(err) {
+  console.warn('Altitude error: ' + err.code + ' - ' + err.message); 
+  sendMessage({
+    'Err': constants.ALTITUDE_ERROR,
+  });    
 }
 
 function geoloc(latitude, longitude)
@@ -303,20 +335,19 @@ function geoloc(latitude, longitude)
     this.longitude=longitude;
 }
 
-function fetchLocation() {
+function fetchLocation(callback) {
     if (!settings.cfgWeatherLocPhone) {
       // Retrieve location from settings
       var loc = new geoloc(settings.cfgWeatherLocLat, settings.cfgWeatherLocLong);
-      fetchWeather(loc);
+      callback(loc);
     } else {
       // Retrieve location from phone
-      window.navigator.geolocation.getCurrentPosition(function(pos) { //Success
+      navigator.geolocation.getCurrentPosition(function(pos) { //Success
         console.log('lat: ' + pos.coords.latitude);
         console.log('lng: ' + pos.coords.longitude);
-        console.log('altitude: ' + pos.coords.altitude + 'm (accuracy ' + pos.coords.altitudeAccuracy + 'm)');
     
         var loc = new geoloc(pos.coords.latitude, pos.coords.longitude);
-        fetchWeather(loc);
+        callback(loc);
     
       }, function(err) { //Error
         console.warn('location error: ' + err.code + ' - ' + err.message);
@@ -331,6 +362,7 @@ function fetchLocation() {
 }
 
 function fetchWeather(loc) {
+    var WeatherMan = require('./libs/weather-man');
     var wm = null;
     if (settings.cfgWeatherProvider == constants.OPENWEATHERMAP && settings.cfgWeatherOWMKey && settings.cfgWeatherOWMKey.length > 0) {
         wm = new WeatherMan(WeatherMan.OPENWEATHERMAP, settings.cfgWeatherOWMKey);
@@ -379,14 +411,10 @@ function fetchWeather(loc) {
             var cond = conditions[condition] ? conditions[condition] : constants.CLEAR;
             console.log('temp: ' + temp);
             console.log('condition: ' + cond + ' (' + condition + ')');
-            console.log('sunrise: ' + result.getSunriseFormatted());
-            console.log('sunset: ' + result.getSunsetFormatted());
 
             sendMessage({
                 'Temperature': temp,
                 'Condition': cond,
-                'Sunrise': result.getSunrise(),
-                'Sunset': result.getSunset(),
             });
         }).catch(function(result) {
             console.warn('weather error: ' + JSON.stringify(result));
@@ -403,13 +431,30 @@ function fetchWeather(loc) {
     }
 }
 
-function fetchMoonphase() {
-  var moonphase = require('./moonphase');  
-  var mp = moonphase();
-  console.log('Moon phase: ' + mp.phase + ", illumination: " + mp.illumination);
+function fetchSun(loc) {
+  var SunCalc = require('./libs/suncalc');
+  var times = SunCalc.getTimes(new Date(), loc.latitude, loc.longitude);
+  
+  console.log('dawn: ' + times.dawn.getHours() + ':' + times.dawn.getMinutes());
+  console.log('sunrise: ' + times.sunrise.getHours() + ':' + times.sunrise.getMinutes());
+  console.log('sunset: ' + times.sunsetStart.getHours() + ':' + times.sunsetStart.getMinutes());
+  console.log('dusk: ' + times.dusk.getHours() + ':' + times.dusk.getMinutes());
   
   sendMessage({
-    'Moonphase': mp.phase,
-    'Moonillumination': mp.illumination
+    'Dawn': times.dawn.getHours() * 60 + times.dawn.getMinutes(),
+    'Sunrise': times.sunrise.getHours() * 60 + times.sunrise.getMinutes(),
+    'Sunset': times.sunsetStart.getHours() * 60 + times.sunsetStart.getMinutes(),
+    'Dusk': times.dusk.getHours() * 60 + times.dusk.getMinutes(),
+  });
+}
+
+function fetchMoonphase() {
+  var SunCalc = require('./libs/suncalc');
+  var moon = SunCalc.getMoonIllumination(new Date());  
+  console.log('Moon phase: ' + Math.round(moon.phase * 360) + ", illumination: " + Math.round(moon.fraction * 100));
+  
+  sendMessage({
+    'Moonphase': Math.round(moon.phase * 360),
+    'Moonillumination': Math.round(moon.fraction * 100)
   });
 }
