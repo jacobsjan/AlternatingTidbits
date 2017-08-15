@@ -348,6 +348,12 @@ module.exports = [
       },
       {
         "type": "toggle",
+        "messageKey": "cfgEnableLocation",
+        "label": "Location",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
         "messageKey": "cfgEnableHeartrate",
         "label": "Heart rate",
         "defaultValue": true,
@@ -1375,6 +1381,10 @@ module.exports = [
             "value": constants.TIME_TOTAL_SLEEP 
           }
         ]
+      },
+      { 
+        "type": "text", 
+        "defaultValue": "Climb|descend continuously tracks phone GPS during activity."
       }
     ]
   },
@@ -1395,6 +1405,188 @@ module.exports = [
         "label": "Show intensity zone",
         "description": "Fat Burn (92 - 128 BPM), Endurance (129 - 155 BPM), Performance (156 - MAX BPM).",
         "defaultValue": true
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Location"
+      },
+      {
+        "type": "select",
+        "messageKey": "Location1",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 1",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Road", 
+            "value": constants.ROAD
+          },
+          { 
+            "label": "City/Town/Hamlet", 
+            "value": constants.CITY_TOWN_HAMLET
+          },
+          { 
+            "label": "State", 
+            "value": constants.STATE
+          },
+          { 
+            "label": "Country", 
+            "value": constants.COUNTRY
+          },
+          { 
+            "label": "Country code", 
+            "value": constants.COUNTRY_CODE
+          },
+          { 
+            "label": "Latitude xx°xx'xx\"", 
+            "value": constants.LATITUDE_DEGREES
+          },
+          { 
+            "label": "Longitude xx°xx'xx\"", 
+            "value": constants.LONGITUDE_DEGREES
+          },
+          { 
+            "label": "Latitude xx.xxx", 
+            "value": constants.LATITUDE_DECIMAL
+          },
+          { 
+            "label": "Longitude xx.xxx", 
+            "value": constants.LONGITUDE_DECIMAL
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "Location2",
+        "defaultValue": constants.EMPTY,
+        "label": "Line 2",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Road", 
+            "value": constants.ROAD
+          },
+          { 
+            "label": "City/Town/Hamlet", 
+            "value": constants.CITY_TOWN_HAMLET
+          },
+          { 
+            "label": "State", 
+            "value": constants.STATE
+          },
+          { 
+            "label": "Country", 
+            "value": constants.COUNTRY
+          },
+          { 
+            "label": "Country code", 
+            "value": constants.COUNTRY_CODE
+          },
+          { 
+            "label": "Latitude xx°xx'xx\"", 
+            "value": constants.LATITUDE_DEGREES
+          },
+          { 
+            "label": "Longitude xx°xx'xx\"", 
+            "value": constants.LONGITUDE_DEGREES
+          },
+          { 
+            "label": "Latitude xx.xxx", 
+            "value": constants.LATITUDE_DECIMAL
+          },
+          { 
+            "label": "Longitude xx.xxx", 
+            "value": constants.LONGITUDE_DECIMAL
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "Location3",
+        "defaultValue": constants.CITY_TOWN_HAMLET,
+        "label": "Line 3",
+        "options": [
+          { 
+            "label": "(Empty)",
+            "value": constants.EMPTY
+          },
+          { 
+            "label": "Road", 
+            "value": constants.ROAD
+          },
+          { 
+            "label": "City/Town/Hamlet", 
+            "value": constants.CITY_TOWN_HAMLET
+          },
+          { 
+            "label": "State", 
+            "value": constants.STATE
+          },
+          { 
+            "label": "Country", 
+            "value": constants.COUNTRY
+          },
+          { 
+            "label": "Country code", 
+            "value": constants.COUNTRY_CODE
+          },
+          { 
+            "label": "Latitude xx°xx'xx\"", 
+            "value": constants.LATITUDE_DEGREES
+          },
+          { 
+            "label": "Longitude xx°xx'xx\"", 
+            "value": constants.LONGITUDE_DEGREES
+          },
+          { 
+            "label": "Latitude xx.xxx", 
+            "value": constants.LATITUDE_DECIMAL
+          },
+          { 
+            "label": "Longitude xx.xxx", 
+            "value": constants.LONGITUDE_DECIMAL
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "cfgLocationRefresh",
+        "defaultValue": 30,
+        "label": "Refresh every",
+        "description":"Location refresh is suspended during sleep.",
+        "options": [
+          { 
+            "label": "10 mins", 
+            "value": 10
+          },
+          { 
+            "label": "30 mins",
+            "value": 30
+          },
+          { 
+            "label": "60 mins",
+            "value": 60
+          },
+          { 
+            "label": "2 hours",
+            "value": 120
+          },
+          { 
+            "label": "4 hours",
+            "value": 240
+          }
+        ]
       }
     ]
   },
@@ -1426,7 +1618,7 @@ module.exports = [
       },
       { 
         "type": "text", 
-        "defaultValue": "Sunset/sunrise is part of the weather refresh/location." 
+        "defaultValue": "Also mentions when it's dawn or dusk." 
       }
     ]
   },

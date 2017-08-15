@@ -15,9 +15,16 @@ void crash_leave_zone(enum CrashZone zone) {
   persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone);
 }
 
+void crash_detection_clear() {
+  persist_delete(STORAGE_CRASH_NUM);
+  persist_delete(STORAGE_CRASH_TIMESTAMPS);
+  persist_delete(STORAGE_CRASH_DETECTOR_ZONE);
+  persist_delete(STORAGE_CRASH_ZONES);
+}
+
 void crash_detection_init() {
   // Read previous crash info
-  #define MAX_TIMESTAMPS (PERSIST_DATA_MAX_LENGTH / sizeof(time_t))
+  #define MAX_TIMESTAMPS 5 /* (PERSIST_DATA_MAX_LENGTH / sizeof(time_t)) */
   uint num_crashes = persist_exists(STORAGE_CRASH_NUM) ? persist_read_int(STORAGE_CRASH_NUM) : 0;
   time_t crash_timestamps[MAX_TIMESTAMPS] = { 0 };
   if (persist_exists(STORAGE_CRASH_TIMESTAMPS)) persist_read_data(STORAGE_CRASH_TIMESTAMPS, &crash_timestamps, sizeof(crash_timestamps));   
@@ -51,10 +58,10 @@ void crash_detection_init() {
   if (num_crashes > 0) {
     APP_LOG(APP_LOG_LEVEL_INFO, "%d Crashes detected. Restarts at:", num_crashes);
     char timestamp[30];
-    for (uint i = 0; i < num_crashes % MAX_TIMESTAMPS; ++i) {
-      const struct tm *crash_time = localtime(&crash_timestamps[i]);
+    for (uint i = num_crashes - MAX_TIMESTAMPS > 0 ? num_crashes - MAX_TIMESTAMPS : 0; i < num_crashes; ++i) {
+      const struct tm *crash_time = localtime(&crash_timestamps[i % MAX_TIMESTAMPS]);
       strftime(timestamp, sizeof(timestamp) / sizeof(char), "%F %T", crash_time);
-      APP_LOG(APP_LOG_LEVEL_INFO, "[%s] Zone %d.", timestamp, crash_zones[i]);
+      APP_LOG(APP_LOG_LEVEL_INFO, "[%s] Zone %d.", timestamp, crash_zones[i % MAX_TIMESTAMPS]);
     }
   }
   

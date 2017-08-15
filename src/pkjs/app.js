@@ -79,6 +79,10 @@ Pebble.addEventListener('webviewclosed', function(e) {
   // Get the keys and values from each config item
   var dict = clay.getSettings(e.response);
   
+  // Calculate alternative timezone offset
+  var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
+  dict[keys.cfgTimeZoneOffset] = timezoneOffset;
+  
   // Remove invalid countdown information
   var countdowns = JSON.parse(dict[keys.cfgCountdownLabel]);
   countdowns = removeInvalidCountdowns(countdowns);
@@ -98,10 +102,6 @@ Pebble.addEventListener('webviewclosed', function(e) {
   delete dict[keys.cfgCountdownTo];
   delete dict[keys.cfgCountdownTime];
   delete dict[keys.cfgCountdownDate];
-  
-  // Calculate alternative timezone offset
-  var timezoneOffset = calculateTimezoneOffset(dict[keys.cfgTimeZoneCity]);
-  dict[keys.cfgTimeZoneOffset] = timezoneOffset;
     
   // Convert health indicators to int
   dict[keys.cfgHealthNormalLine1] = parseInt(dict[keys.cfgHealthNormalLine1]);
@@ -116,8 +116,15 @@ Pebble.addEventListener('webviewclosed', function(e) {
   dict[keys.cfgHealthSleepLine1] = parseInt(dict[keys.cfgHealthSleepLine1]);
   dict[keys.cfgHealthSleepLine2] = parseInt(dict[keys.cfgHealthSleepLine2]);
   dict[keys.cfgHealthSleepLine3] = parseInt(dict[keys.cfgHealthSleepLine3]);
+   
+  // Clear location config from data sent to the watch
+  delete dict[keys.Location1];
+  delete dict[keys.Location2];
+  delete dict[keys.Location3];
   
-  // Convert weather refresh to int
+  // Convert refreshes to int
+  dict[keys.cfgLocationRefresh] = parseInt(dict[keys.cfgLocationRefresh]);
+  dict[keys.cfgAltitudeRefresh] = parseInt(dict[keys.cfgAltitudeRefresh]);
   dict[keys.cfgWeatherRefresh] = parseInt(dict[keys.cfgWeatherRefresh]);
   
   // Determine alternative timezone offset based on timezone name
@@ -239,9 +246,6 @@ Pebble.addEventListener('ready', function(e) {
 Pebble.addEventListener('appmessage', function(e) {
   try {
     console.log('Received message: ' + JSON.stringify(e.payload));
-    if (e.payload.FetchWeather) fetchLocation(fetchWeather);
-    if (e.payload.FetchSun) fetchLocation(fetchSun);
-    if (e.payload.FetchMoonphase) fetchMoonphase();
     if (e.payload.FetchAltitude) fetchAltitude(); 
     if (e.payload.SubscribeAltitude) {
       lastSubmittedAltitude = Number.MIN_VALUE;
@@ -249,25 +253,53 @@ Pebble.addEventListener('appmessage', function(e) {
       altitudeWatchId = navigator.geolocation.watchPosition(processAltitude, failedAltitude);
     } 
     if (e.payload.UnsubscribeAltitude) navigator.geolocation.clearWatch(altitudeWatchId);
+    if (e.payload.FetchLocation) findLocation(fetchLocation);
+    if (e.payload.FetchMoonphase) fetchMoonphase();
+    if (e.payload.FetchSun) findLocation(fetchSun);
+    if (e.payload.FetchWeather) findLocation(fetchWeather);
     if (e.payload.HeartrateAvailable) heartrateAvailable = true;
     if (e.payload.Exception) analytics.trackException("C crash in zone " + e.payload.Exception + ".");
     if (e.payload.Fireworks) analytics.trackEvent('watchface', 'Fireworks');
-    if (e.payload.SleepTrust) {
-      if (e.payload.SleepTrust == 1) {
-        analytics.trackEvent('watchface', 'Sleep not trusted');
-      } else if (e.payload.SleepTrust == 2) { 
-        analytics.trackEvent('watchface', 'Sleep trusted again');
-      } else { 
-        analytics.trackEvent('watchface', 'Sleep trust unclear');
-      }
-    }
   }
   catch (err) {
+    console.warn('AddEventListener error: ' + err);
     analytics.trackException(err);
   }
   
   pingAnalytics();
 });
+
+function geoloc(latitude, longitude)
+{
+    this.latitude=latitude;
+    this.longitude=longitude;
+}
+
+function findLocation(callback) {
+    if (!settings.cfgWeatherLocPhone) {
+      // Retrieve location from settings
+      var loc = new geoloc(settings.cfgWeatherLocLat, settings.cfgWeatherLocLong);
+      callback(loc);
+    } else {
+      // Retrieve location from phone
+      navigator.geolocation.getCurrentPosition(function(pos) { //Success
+        console.log('lat: ' + pos.coords.latitude);
+        console.log('lng: ' + pos.coords.longitude);
+    
+        var loc = new geoloc(pos.coords.latitude, pos.coords.longitude);
+        callback(loc);
+    
+      }, function(err) { //Error
+        console.warn('location error: ' + err.code + ' - ' + err.message);
+        sendMessage({
+          'Err': constants.LOCATION_ERROR,
+        });    
+      }, { //Options
+        timeout: 30000, //30 seconds
+        maximumAge: 300000, //5 minutes
+      });
+  }
+}
 
 function processAltitude(position) {
   // Was an altitude provided?
@@ -329,36 +361,152 @@ function failedAltitude(err) {
   });    
 }
 
-function geoloc(latitude, longitude)
-{
-    this.latitude=latitude;
-    this.longitude=longitude;
+function toDegreesMinutesAndSeconds(coordinate) {
+    var absolute = Math.abs(coordinate);
+    var degrees = Math.floor(absolute);
+    var minutesNotTruncated = (absolute - degrees) * 60;
+    var minutes = Math.floor(minutesNotTruncated);
+    var seconds = Math.floor((minutesNotTruncated - minutes) * 60);
+
+  return (degrees < 10 ? "0" : "") + degrees + "°" + (minutes < 10 ? "0" : "") + minutes + "'" + (seconds < 10 ? "0" : "") + seconds + '"';
 }
 
-function fetchLocation(callback) {
-    if (!settings.cfgWeatherLocPhone) {
-      // Retrieve location from settings
-      var loc = new geoloc(settings.cfgWeatherLocLat, settings.cfgWeatherLocLong);
-      callback(loc);
-    } else {
-      // Retrieve location from phone
-      navigator.geolocation.getCurrentPosition(function(pos) { //Success
-        console.log('lat: ' + pos.coords.latitude);
-        console.log('lng: ' + pos.coords.longitude);
-    
-        var loc = new geoloc(pos.coords.latitude, pos.coords.longitude);
-        callback(loc);
-    
-      }, function(err) { //Error
-        console.warn('location error: ' + err.code + ' - ' + err.message);
-        sendMessage({
-          'Err': constants.LOCATION_ERROR,
-        });    
-      }, { //Options
-        timeout: 30000, //30 seconds
-        maximumAge: 300000, //5 minutes
-      });
+function extractLocationProperty(location, property) {
+  var point = settings.cfgHealthNumbers ? settings.cfgHealthNumbers == 'M' ? "," : "." : ",";
+  
+  switch (property) {
+    case constants.ROAD:
+      if (location.address.road) return location.address.road;
+      break;
+    case constants.CITY_TOWN_HAMLET:
+      if (location.address.hamlet) return location.address.hamlet;
+      if (location.address.town) return location.address.town;
+      if (location.address.city) return location.address.city;
+      break;
+    case constants.STATE:
+      if (location.address.state) return location.address.state;
+      break;
+    case constants.COUNTRY:
+      if (location.address.country) return location.address.country;
+      break;
+    case constants.COUNTRY_CODE:
+      if (location.address.country_code) return location.address.country_code.toUpperCase();
+      break;
+    case constants.LATITUDE_DEGREES:
+      if (location.lat) {
+        var latitude = toDegreesMinutesAndSeconds(location.lat);
+        var latitudeCardinal = parseFloat(location.lat) >= 0 ? "N" : "S";
+        return latitude + latitudeCardinal;
+      }
+      break;
+    case constants.LONGITUDE_DEGREES:
+      if (location.lon) {
+        var longitude = toDegreesMinutesAndSeconds(location.lon);
+        var longitudeCardinal = parseFloat(location.lon) >= 0 ? "E" : "W";
+        return longitude + longitudeCardinal;
+      }
+      break;
+    case constants.LATITUDE_DECIMAL:
+      if (location.lat) {
+        return Number(Math.round(location.lat + 'e3') + 'e-3').toString().replace(".", point);
+      }
+      break;
+    case constants.LONGITUDE_DECIMAL:
+      if (location.lon) {
+        return Number(Math.round(location.lon + 'e3') + 'e-3').toString().replace(".", point);
+      }
+      break;
+  }  
+  
+  return null;
+}
+
+function processLocation(location) {
+  var location1, location2, location3;
+  location1 = extractLocationProperty(location, settings.Location1 ? parseInt(settings.Location1) : constants.EMPTY);
+  location2 = extractLocationProperty(location, settings.Location2 ? parseInt(settings.Location2) : constants.EMPTY);
+  location3 = extractLocationProperty(location, settings.Location3 ? parseInt(settings.Location3) : constants.CITY_TOWN_HAMLET);
+  
+  var message = { };
+  if (location1) message.Location1 = location1;
+  if (location2) message.Location2 = location2;
+  if (location3) message.Location3 = location3;
+  
+  console.log("Location: " + location1 + ", " + location2 + ", " + location3);
+  
+  sendMessage(message);
+}
+
+function fetchLocation(loc) {
+  // Do we need an OpenStreetMap call or are only latitude and longitude required?
+  var location1cfg, location2cfg, location3cfg;
+  location1cfg = settings.Location1 ? parseInt(settings.Location1) : constants.EMPTY;
+  location2cfg = settings.Location2 ? parseInt(settings.Location2) : constants.EMPTY;
+  location3cfg = settings.Location3 ? parseInt(settings.Location3) : constants.CITY_TOWN_HAMLET;
+  if ((location1cfg == constants.EMPTY || (location1cfg >= constants.LATITUDE_DEGREES && location1cfg <= constants.LONGITUDE_DECIMAL)) &&
+      (location2cfg == constants.EMPTY || (location2cfg >= constants.LATITUDE_DEGREES && location2cfg <= constants.LONGITUDE_DECIMAL)) &&
+      (location3cfg == constants.EMPTY || (location3cfg >= constants.LATITUDE_DEGREES && location3cfg <= constants.LONGITUDE_DECIMAL))) {
+    // No OpenStreetMap call necessary 
+    var location = {
+      lat: loc.latitude,
+      lon: loc.longitude
+    };
+    console.log("Keeping it local :-)");
+    processLocation(location);
+  }  else {  
+    // Call to OpenStreetMap required
+    var req = new XMLHttpRequest();
+    req.open("GET", "http://nominatim.openstreetmap.org/reverse?format=json&lat=" + loc.latitude + "&lon=" + loc.longitude, true);
+    req.setRequestHeader("User-Agent", "Alternating Tidbits Pebble watchface");
+    req.onload = function(e) {
+      if(req.status == 200) {
+        var response = JSON.parse(req.responseText);
+        processLocation(response);
+      }
+      else {
+        failedLocation(req.status, "OpenStreetMap returned error");
+      }
+    };
+    req.onerror = function(e) {
+      failedLocation(e);
+    };
+    req.send(null);
   }
+}
+
+function failedLocation(err) {
+  console.warn('Location error: ' + err.code + ' - ' + err.message); 
+  sendMessage({
+    'Err': constants.LOCATION_ERROR,
+  });    
+}
+
+function fetchMoonphase() {
+  var SunCalc = require('./libs/suncalc');
+  var moon = SunCalc.getMoonIllumination(new Date());  
+  console.log('Moon phase: ' + Math.round(moon.phase * 360) + ", illumination: " + Math.round(moon.fraction * 100));
+  
+  sendMessage({
+    'Moonphase': Math.round(moon.phase * 360),
+    'Moonillumination': Math.round(moon.fraction * 100)
+  });
+}
+
+function fetchSun(loc) {
+  var SunCalc = require('./libs/suncalc');
+  var times = SunCalc.getTimes(new Date(), loc.latitude, loc.longitude);
+  
+  console.log('dawn: ' + times.dawn.getHours() + ':' + times.dawn.getMinutes());
+  console.log('sunrise: ' + times.sunrise.getHours() + ':' + times.sunrise.getMinutes());
+  console.log('sunset: ' + times.sunsetStart.getHours() + ':' + times.sunsetStart.getMinutes());
+  console.log('dusk: ' + times.dusk.getHours() + ':' + times.dusk.getMinutes());
+  
+  sendMessage({
+    'Dawn': times.dawn.getHours() * 60 + times.dawn.getMinutes(),
+    'Sunrise': times.sunrise.getHours() * 60 + times.sunrise.getMinutes(),
+    'Sunset': times.sunsetStart.getHours() * 60 + times.sunsetStart.getMinutes(),
+    'Dusk': times.dusk.getHours() * 60 + times.dusk.getMinutes(),
+  });
 }
 
 function fetchWeather(loc) {
@@ -429,32 +577,4 @@ function fetchWeather(loc) {
             'Err': constants.WEATHER_ERROR,
         });
     }
-}
-
-function fetchSun(loc) {
-  var SunCalc = require('./libs/suncalc');
-  var times = SunCalc.getTimes(new Date(), loc.latitude, loc.longitude);
-  
-  console.log('dawn: ' + times.dawn.getHours() + ':' + times.dawn.getMinutes());
-  console.log('sunrise: ' + times.sunrise.getHours() + ':' + times.sunrise.getMinutes());
-  console.log('sunset: ' + times.sunsetStart.getHours() + ':' + times.sunsetStart.getMinutes());
-  console.log('dusk: ' + times.dusk.getHours() + ':' + times.dusk.getMinutes());
-  
-  sendMessage({
-    'Dawn': times.dawn.getHours() * 60 + times.dawn.getMinutes(),
-    'Sunrise': times.sunrise.getHours() * 60 + times.sunrise.getMinutes(),
-    'Sunset': times.sunsetStart.getHours() * 60 + times.sunsetStart.getMinutes(),
-    'Dusk': times.dusk.getHours() * 60 + times.dusk.getMinutes(),
-  });
-}
-
-function fetchMoonphase() {
-  var SunCalc = require('./libs/suncalc');
-  var moon = SunCalc.getMoonIllumination(new Date());  
-  console.log('Moon phase: ' + Math.round(moon.phase * 360) + ", illumination: " + Math.round(moon.fraction * 100));
-  
-  sendMessage({
-    'Moonphase': Math.round(moon.phase * 360),
-    'Moonillumination': Math.round(moon.fraction * 100)
-  });
 }

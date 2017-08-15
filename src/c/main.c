@@ -10,12 +10,13 @@
 #include "messagequeue.h"
 
 AppTimer* altitude_fetch_timer = NULL;
+AppTimer* location_fetch_timer = NULL;
 AppTimer* moonphase_fetch_timer = NULL;
 AppTimer* sun_fetch_timer = NULL;
 AppTimer* weather_fetch_timer = NULL;
 
+#define VIBRATION_OVERLOAD_TIMEOUT 15000
 AppTimer* vibration_overload_timer = NULL;
-AppTimer* accel_unsubscribe_timer = NULL;
 bool tapping = false;
 
 void altitude_req_changed(bool required);
@@ -128,21 +129,32 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
     } 
   }
   
+  // Location
+  char* location1 = NULL;
+  char* location2 = NULL;
+  char* location3 = NULL;
+  tuple = dict_find(iter, MESSAGE_KEY_Location1);
+  if(tuple) location1 = tuple->value->cstring;
+  tuple = dict_find(iter, MESSAGE_KEY_Location2);
+  if(tuple) location2 = tuple->value->cstring;
+  tuple = dict_find(iter, MESSAGE_KEY_Location3);
+  if(tuple) location3 = tuple->value->cstring;
+  if (location1 || location2 || location3) model_set_location(location1, location2, location3);
+  
   // Configuration
   bool cfgChanged = parse_configuration_messages(iter);    
   if (cfgChanged) {
     // Hidden function to clear crash detection history
     if (gcolor_equal(config->color_background, GColorWhite) && gcolor_equal(config->color_primary, GColorWhite)) {
-      persist_delete(STORAGE_CRASH_NUM);
-      persist_delete(STORAGE_CRASH_TIMESTAMPS);
+      crash_detection_clear();
     }
     
     // Hidden function to crash the watchface
-    /*if (gcolor_equal(config->color_background, GColorBlack) && gcolor_equal(config->color_primary, GColorBlack)) {
+    if (gcolor_equal(config->color_background, GColorBlack) && gcolor_equal(config->color_primary, GColorBlack)) {
       void (*nullPtr)();
       nullPtr = 0;
       nullPtr();
-    }*/
+    }
     
     // Restart view  
     view_deinit();
@@ -414,10 +426,18 @@ void battery_req_changed(bool required) {
   }
 }
 
-void vibration_overload_timeout_callback(void *data) {
+void vibration_overload_end_callback(void *data) {
   // Reset vibration overload error
   model_set_error(ERROR_NONE);  
   vibration_overload_timer = NULL;
+}
+
+void vibration_overload_start_callback(void *data) {  
+  // Set error
+  model_set_error(ERROR_VIBRATION_OVERLOAD);
+
+  // Timeout error after 15sec
+  vibration_overload_timer = app_timer_register(VIBRATION_OVERLOAD_TIMEOUT, vibration_overload_end_callback, NULL);
 }
 
 static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
@@ -428,10 +448,10 @@ static void accel_flick_handler(AccelAxisType axis, int32_t direction) {
   } else {
     // Prolong vibration overload
     if (vibration_overload_timer) {
-      app_timer_reschedule(vibration_overload_timer, 15000);
+      app_timer_reschedule(vibration_overload_timer, VIBRATION_OVERLOAD_TIMEOUT);
     }
     else {
-      vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
+      vibration_overload_timer = app_timer_register(VIBRATION_OVERLOAD_TIMEOUT, vibration_overload_end_callback, NULL);
     }
   }
 }
@@ -446,11 +466,7 @@ void flick_req_changed(bool required) {
 
 void accel_handler(AccelData *data, uint32_t num_samples) {
   // Check whether tap events are still required
-  if (!(model->update_req & UPDATE_TAPS)) 
-  { 
-    APP_LOG(APP_LOG_LEVEL_WARNING, "Accel handling while no longer required"); 
-    return; 
-  }
+  if (!(model->update_req & UPDATE_TAPS)) return; 
   
   // Detect minor taps
   bool also_calm = false;
@@ -471,35 +487,13 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
     if (diff < 50) also_calm = true;
   }
   
-  if (!also_calm) {    
-    // Set error
-    model_set_error(ERROR_VIBRATION_OVERLOAD);
-    
-    // Timeout error after 15sec
-    if (vibration_overload_timer) {
-      app_timer_reschedule(vibration_overload_timer, 15000);
-    }
-    else {
-      vibration_overload_timer = app_timer_register(15000, vibration_overload_timeout_callback, NULL);
-    }
+  if (!also_calm) {
+    // Vibration overload: unsubscribe from accel_handler outside of accel_handler
+    vibration_overload_timer = app_timer_register(0, vibration_overload_start_callback, NULL);
   } else if (tapped) {
     // Signal tap detected
     model_signal_tap();
   }
-}
-
-void accel_unsubscribe_leave_zone_callback(void *data) {  
-  crash_leave_zone(CRASH_ZONE_ACCEL_UNSUBSCRIBE);
-  accel_unsubscribe_timer = NULL;
-}
-
-void accel_unsubscribe_callback(void *data) {  
-  //accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
-  crash_enter_zone(CRASH_ZONE_ACCEL_UNSUBSCRIBE);
-  accel_data_service_unsubscribe(); 
-  accel_unsubscribe_timer = NULL;
-  
-  accel_unsubscribe_timer = app_timer_register(0, accel_unsubscribe_leave_zone_callback, NULL);
 }
 
 void tap_req_changed(bool required) {
@@ -509,12 +503,7 @@ void tap_req_changed(bool required) {
     accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
     tapping = false;
   } else {
-    // Unsubscribe from accelerator data via timer. 
-    // Unsubscribing here, often in an accel event,
-    // causes the app to crash.
-    if (!accel_unsubscribe_timer){
-      accel_unsubscribe_timer = app_timer_register(0, accel_unsubscribe_callback, NULL); 
-    }
+    accel_data_service_unsubscribe(); 
   }
 }
 
@@ -557,6 +546,24 @@ void altitude_continuous_req_changed(bool required) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SubscribeAltitude, 1));      
   } else {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_UnsubscribeAltitude, 1));       
+  }
+}
+
+void fetch_location(void *initialized) {  
+  // Do not refetch when sleeping except on initial call
+  if (!is_asleep() || !initialized) message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_FetchLocation, 1));  
+
+  // Schedule new fetch
+  if (location_fetch_timer && !initialized) app_timer_cancel(location_fetch_timer);
+  location_fetch_timer = app_timer_register(config->location_refresh * SECONDS_PER_MINUTE * 1000, fetch_location, (void*)-1);  
+}
+
+void location_req_changed(bool required) {
+  if (required) {
+    fetch_location(NULL);
+  } else if (location_fetch_timer) {
+    app_timer_cancel(location_fetch_timer);
+    location_fetch_timer = NULL;
   }
 }
 
@@ -625,6 +632,7 @@ void update_requirements_changed(enum ModelUpdates prev_req) {
   #endif
   if (changes & UPDATE_ALTITUDE) altitude_req_changed(model->update_req & UPDATE_ALTITUDE);
   if (changes & UPDATE_ALTITUDE_CONTINUOUS) altitude_continuous_req_changed(model->update_req & UPDATE_ALTITUDE_CONTINUOUS);
+  if (changes & UPDATE_LOCATION) location_req_changed(model->update_req & UPDATE_LOCATION);
   if (changes & UPDATE_MOONPHASE) moonphase_req_changed(model->update_req & UPDATE_MOONPHASE);
   if (changes & UPDATE_BATTERY) battery_req_changed(model->update_req & UPDATE_BATTERY);
   if (changes & UPDATE_WEATHER) weather_req_changed(model->update_req & UPDATE_WEATHER);

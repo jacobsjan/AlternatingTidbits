@@ -4,46 +4,22 @@
 #include "messagequeue.h"
 
 #if defined(PBL_HEALTH) 
-bool sleep_trusted = true;
-int last_seconds_slept = 0;
-time_t last_sleep_update = 0;
+time_t last_recorded_awake;
 #endif
 
 bool is_asleep() {
   #if defined(PBL_HEALTH) 
+  // Some watches are stuck on forever sleeping,
+  // do not trust sleep if witnessed awake phase in last 24hrs
   HealthActivityMask activities = health_service_peek_current_activities();
   bool sleeping = activities & (HealthActivitySleep | HealthActivityRestfulSleep);
-  
-  // Check whether sleeping according to peeking at activities can be trusted  
-  if (!sleeping) {
-    if (!sleep_trusted) {
-      // Thought maybe that sleeping could not be trusted but apparantly it can
-      sleep_trusted = true;
-      last_sleep_update = 0;
-      
-      // Send sleep trust to analytics 
-      message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SleepTrust, 2)); 
-    }
+  time_t now = time(NULL);
+  if (sleeping) {
+    return now - last_recorded_awake < SECONDS_PER_DAY; // Only trust sleep if awake in the last 24hrs
   } else {
-    // Check whether we appear to be sleeping while the sleep time is not increasing
-    int seconds_slept = (int)health_service_sum_today(HealthMetricSleepSeconds);
-    if (last_sleep_update == 0 || seconds_slept != last_seconds_slept) {
-      // The sleep time is still changing
-      last_seconds_slept = seconds_slept;
-      last_sleep_update = time(NULL);
-    } else {
-      // The sleep time is not changing, since how long?
-      long diff = time(NULL) - last_sleep_update;
-      if (diff > SECONDS_PER_MINUTE * 15) {
-        // Peek has been saying we are sleeping for more than 15 minutes while the sleep time is not increasing, don't trust it
-        sleep_trusted = false;
-        
-        // Send sleep trust to analytics 
-        message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_SleepTrust, 1)); 
-      }
-    }
+    last_recorded_awake = now;
+    return false;
   }
-  return sleeping && sleep_trusted;
   #else
   // If health is not supported never report sleeping
   return false;
@@ -73,12 +49,12 @@ bool is_heartrate_available() {
 
 void utils_init() {  
   #if defined(PBL_HEALTH) 
-  sleep_trusted = persist_exists(STORAGE_SLEEP_TRUSTED) ? persist_read_bool(STORAGE_SLEEP_TRUSTED) : true;
+  last_recorded_awake = persist_exists(STORAGE_LAST_RECORDED_AWAKE) ? persist_read_int(STORAGE_LAST_RECORDED_AWAKE) : 0;
   #endif
 }
 
 void utils_deinit() {
   #if defined(PBL_HEALTH) 
-  persist_write_bool(STORAGE_SLEEP_TRUSTED, sleep_trusted);
+  persist_write_int(STORAGE_LAST_RECORDED_AWAKE, last_recorded_awake);
   #endif
 }

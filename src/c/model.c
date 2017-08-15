@@ -154,6 +154,30 @@ void model_set_altitude(int altitude, int accuracy) {
   }
 }
 
+void model_set_location(char* location1, char* location2, char* location3) {
+  if (location1) {
+    strncpy(model->location1, location1, sizeof(model->location1));
+  } else { 
+    model->location1[0] = 0;
+  }
+  if (location2) {
+    strncpy(model->location2, location2, sizeof(model->location2)); 
+  } else { 
+    model->location2[0] = 0;
+  }
+  if (location3) {
+    strncpy(model->location3, location3, sizeof(model->location3));
+  } else {
+    model->location3[0] = 0;
+  }
+    
+  if (model->update_req & UPDATE_LOCATION) {
+    if (model->events.on_location_change) {
+      model->events.on_location_change();
+    }
+  }
+}
+
 void model_signal_flick() {
   if (model->update_req & UPDATE_FLICKS) {
     if (model->events.on_flick) {

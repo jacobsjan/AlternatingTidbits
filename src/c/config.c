@@ -2,6 +2,7 @@
 #include "config.h"
 #include "configv15.h"
 #include "storage.h"
+#include "crashdetection.h"
 
 // Initialize the configuration (see https://forums.pebble.com/t/question-regarding-struct/13104/4)
 struct Config actual_config;
@@ -74,6 +75,8 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableHeartrate);
   if(tuple && (cfgChanged = true)) config->enable_heartrate = tuple->value->int8;
   #endif
+  tuple = dict_find(iter, MESSAGE_KEY_cfgEnableLocation);
+  if(tuple && (cfgChanged = true)) config->enable_location = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableMoonphase);
   if(tuple && (cfgChanged = true)) config->enable_moonphase = tuple->value->int8;
   tuple = dict_find(iter, MESSAGE_KEY_cfgEnableSun);
@@ -174,6 +177,10 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   tuple = dict_find(iter, MESSAGE_KEY_cfgHeartrateZone);
   if(tuple && (cfgChanged = true)) config->heartrate_zone = tuple->value->int8;  
   #endif 
+  
+  // Location
+  tuple = dict_find(iter, MESSAGE_KEY_cfgLocationRefresh);
+  if(tuple && (cfgChanged = true)) config->location_refresh = tuple->value->int32;
     
   // Moonphase
   tuple = dict_find(iter, MESSAGE_KEY_cfgMoonphaseNightOnly);
@@ -231,6 +238,7 @@ void config_load() {
   #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
   config->enable_heartrate = true;
   #endif
+  config->enable_location = true;
   config->enable_moonphase = true;
   config->enable_sun = true;
   config->enable_weather = true;
@@ -268,7 +276,9 @@ void config_load() {
   #endif
 
   config->moonphase_night_only = true;
-
+  
+  config->location_refresh = 30; 
+  
   config->weather_refresh = 30; 
   
   // Load settings from storage
@@ -292,6 +302,9 @@ void config_load() {
       struct ConfigV15 tempConfig;
       persist_read_data(STORAGE_CONFIG, &tempConfig, sizeof(struct ConfigV15));
       convert_config_v15(config, &tempConfig);
+      
+      // Clear crash history after upgrade
+      crash_detection_clear();
     }
   }
 }

@@ -40,6 +40,7 @@ struct Config {
   #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
   bool enable_heartrate;
   #endif
+  bool enable_location;
   bool enable_moonphase;
   bool enable_sun;
   bool enable_weather;
@@ -87,6 +88,8 @@ struct Config {
   #endif
   
   bool moonphase_night_only;
+  
+  int location_refresh;
   
   int weather_refresh;
 };

@@ -79,6 +79,7 @@ enum ModelUpdates {
   UPDATE_SUN = 1 << 8,
   UPDATE_BATTERY = 1 << 9,
   UPDATE_HEALTH = 1 << 10,
+  UPDATE_LOCATION = 1 << 11,
 };
 
 struct ModelEvents {
@@ -97,6 +98,7 @@ struct ModelEvents {
   #endif
   void (*on_moonphase_change)();
   void (*on_altitude_change)();
+  void (*on_location_change)();
   
   void (*on_flick)();
   void (*on_tap)();
@@ -131,6 +133,9 @@ struct Model {
   int moonillumination;
   int altitude;
   int altitude_accuracy;
+  char location1[30];
+  char location2[30];
+  char location3[30];
   
   struct ModelEvents events;
 };
@@ -153,6 +158,7 @@ void model_set_activity_counters(int calories, int duration, int distance, int s
 #endif
 void model_set_moon(int moonphase, int moonillumination);
 void model_set_altitude(int altitude, int accuracy);
+void model_set_location(char* location1, char* location2, char* location3);
 
 void model_signal_flick();
 void model_signal_tap();

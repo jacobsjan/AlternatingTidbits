@@ -54,6 +54,7 @@ struct Layers {
   #if defined(PBL_PLATFORM_DIORITE) || defined(PBL_PLATFORM_EMERY) 
   Layer *heartrate;
   #endif
+  Layer *location;
   Layer *moonphase;
   Layer *sunrise_sunset;
   Layer *weather;
@@ -1124,6 +1125,81 @@ void heartrate_update_proc(Layer *layer, GContext *ctx) {
 }
 #endif
 
+bool isSymbol(char* cp) {
+  char c = *cp;
+  if ((c >= '!' && c <= '/') || (c >= ':' && c <= '@') || (c >= '[' && c <= '`') || (c >= '{' && c <= '~')) {
+    return true;
+  } else if ((c == (char)0xc2 && *(cp + 1) == 0xb0) || (*(cp - 1) == 0xc2 && c == (char)0xb0)) { // Degree symbol
+    return true;
+  } else {
+    return false;
+  }
+}
+
+char** tokenize_text(char* text) {
+  // Count parts to output
+  int parts = 1;
+  for (int i = 0; text[i] != 0; i++) {
+    if (i > 0 && isSymbol(&text[i - 1]) && !isSymbol(&text[i])) ++parts; // Number of times a symbol is followed by a non-symbol
+  }
+  parts = parts * 2; // There can be twice as many parts as there are symbols
+  
+  // Create result
+  char** result = malloc((parts + 1) * sizeof(char*)); // Accomodate for an extra NULL pointer
+  char* part_pos;
+  char* curr_pos = text;
+  
+  for (int part = 0; part < parts; part = part + 2) {
+    // Copy non symbol part
+    part_pos = curr_pos;
+    while (*curr_pos != 0 && !isSymbol(curr_pos)) ++curr_pos;
+    int part_length = curr_pos - part_pos;
+    result[part] = malloc((part_length + 1) * sizeof(char)); // Accomodate for an extra zero byte
+    strncpy(result[part], part_pos, part_length);
+    result[part][part_length] = 0; // Finish with a zero byte
+    
+    // Copy symbol part
+    part_pos = curr_pos;
+    while (*curr_pos != 0 && isSymbol(curr_pos)) ++curr_pos;
+    part_length = curr_pos - part_pos; 
+    result[part + 1] = malloc((part_length + 1) * sizeof(char)); // Accomodate for an extra zero byte
+    strncpy(result[part + 1], part_pos, part_length);
+    result[part + 1][part_length] = 0; // Finish with a zero byte
+  }
+  
+  // Finish result with a NULL pointer
+  result[parts] = NULL;
+  
+  return result;
+}
+
+int count_texts(char** texts) {
+  int result = 0;
+  while (texts[result]) ++result;
+  return result;
+}
+
+void free_texts(char** texts) {
+  int i = 0;
+  if (texts) while (texts[i]) free(texts[i++]);
+  free(texts);
+}
+
+void location_update_proc(Layer *layer, GContext *ctx) {
+  // Colorize the texts
+  char **top_texts = tokenize_text(model->location1); 
+  char **middle_texts = tokenize_text(model->location2); 
+  char **bottom_texts = tokenize_text(model->location3); 
+  
+  // Draw
+  draw_multi_centered(layer, ctx, ICON_LOCATION, config->color_secondary, count_texts(top_texts), top_texts, count_texts(middle_texts), middle_texts, count_texts(bottom_texts), bottom_texts);
+  
+  // Free texts
+  free_texts(top_texts);
+  free_texts(middle_texts);
+  free_texts(bottom_texts);
+}
+
 void moonphase_update_proc(Layer *layer, GContext *ctx) {
   char* moon_icon = icons_get_moonphase(model->moonphase);
   char illumination[4];
@@ -1600,11 +1676,31 @@ void compass_enable_changed() {
 }
 #endif
 
-void weather_changed() {
-  if (view.layers.weather == NULL) {
-    // Create weather layer
-    view.layers.weather = alternating_layers_create(weather_update_proc, icons_get_weather_condition_symbol(CONDITION_CLOUDY, true));
+void location_changed() {
+  if (view.layers.location == NULL) {
+    // Create location layer
+    view.layers.location = alternating_layers_create(location_update_proc, ICON_LOCATION);
+  } 
+}
+
+void evaluate_moonphase_req() {
+  if (!config->moonphase_night_only || !is_daytime()) {
+    model_add_update_req(UPDATE_MOONPHASE);
+  } else {
+    model_remove_update_req(UPDATE_MOONPHASE);
+    
+    if (view.layers.moonphase) {
+      // Destroy moonphase layer
+      view.layers.moonphase = alternating_layers_destroy(view.layers.moonphase);
+    }
   }
+}
+
+void moonphase_changed() {
+  if (view.layers.moonphase == NULL) {
+    // Create moonphase layer
+    view.layers.moonphase = alternating_layers_create(moonphase_update_proc, icons_get_moonphase(65));
+  } 
 }
 
 void sunrise_sunset_changed() {
@@ -1616,6 +1712,13 @@ void sunrise_sunset_changed() {
   
   // Check visibility of moonphase based on day or night time
   if (config->enable_moonphase) evaluate_moonphase_req();
+}
+
+void weather_changed() {
+  if (view.layers.weather == NULL) {
+    // Create weather layer
+    view.layers.weather = alternating_layers_create(weather_update_proc, icons_get_weather_condition_symbol(CONDITION_CLOUDY, true));
+  }
 }
 
 #if defined(PBL_HEALTH)
@@ -1642,26 +1745,6 @@ void activity_changed() {
   evaluate_altitude_req();
 }
 #endif
-
-void evaluate_moonphase_req() {
-  if (!config->moonphase_night_only || !is_daytime()) {
-    model_add_update_req(UPDATE_MOONPHASE);
-  } else {
-    model_remove_update_req(UPDATE_MOONPHASE);
-    
-    if (view.layers.moonphase) {
-      // Destroy moonphase layer
-      view.layers.moonphase = alternating_layers_destroy(view.layers.moonphase);
-    }
-  }
-}
-
-void moonphase_changed() {
-  if (view.layers.moonphase == NULL) {
-    // Create moonphase layer
-    view.layers.moonphase = alternating_layers_create(moonphase_update_proc, icons_get_moonphase(65));
-  } 
-}
 
 static void switcher_animation_update(Animation *animation, const AnimationProgress progress) {
   view.switcher_animation_progress = progress;
@@ -1693,6 +1776,7 @@ void switcher_timeout_callback(void *data) {
     
   // Unubscribe from tap events 
   model_remove_update_req(UPDATE_TAPS);
+  model_add_update_req(UPDATE_FLICKS); 
   
   // Reset timeout
   view.switcher_timeout_timer = NULL;
@@ -1725,6 +1809,7 @@ void flicked() {
     view.suspension_reason |= SUSPENSION_SWITCHER;
     
     // Subscribe to tap events
+    model_remove_update_req(UPDATE_FLICKS);
     model_add_update_req(UPDATE_TAPS);
     
     // Deactivate switcher after 30sec
@@ -1935,6 +2020,7 @@ void main_window_unload(Window *window) {
   #if defined(PBL_HEALTH)
   if (view.layers.health) layer_destroy(view.layers.health);
   #endif
+  if (view.layers.location) layer_destroy(view.layers.location);
   if (view.layers.moonphase) layer_destroy(view.layers.moonphase);
   if (view.layers.switcher) layer_destroy(view.layers.switcher);
   
@@ -1996,6 +2082,10 @@ void view_init() {
     model_add_update_req(UPDATE_HEALTH);
   }
   #endif
+  if (config->enable_location) {
+    model->events.on_location_change = &location_changed;
+    model_add_update_req(UPDATE_LOCATION);
+  }
   if (config->enable_moonphase) {
     model->events.on_moonphase_change = &moonphase_changed;
     // Moonphase is first initiated from sunrise_sunset_changed

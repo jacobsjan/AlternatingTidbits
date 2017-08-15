@@ -92,7 +92,6 @@
             "cfgHeartrateZone",
             "cfgFontSmall",
             "cfgFontLarge",
-            "SleepTrust",
             "cfgCountdownCount",
             "cfgCountdownIndex",
             "AltitudeAccuracy",
@@ -101,7 +100,13 @@
             "Dawn",
             "Dusk",
             "FetchAltitude",
-            "cfgAltitudeRefresh"
+            "cfgAltitudeRefresh",
+            "cfgLocationRefresh",
+            "cfgEnableLocation",
+            "Location1",
+            "Location2",
+            "Location3",
+            "FetchLocation"
         ],
         "projectType": "native",
         "resources": {
