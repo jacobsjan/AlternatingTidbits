@@ -313,6 +313,10 @@ void health_init() {
   if (persist_exists(STORAGE_HEALTH_ACTIVITY) && persist_exists(STORAGE_HEALTH_ACTIVITY_START)) {
     enum Activities saved_activity = persist_read_int(STORAGE_HEALTH_ACTIVITY);
     struct ActivityStamp saved_activity_start;
+    if (persist_get_size(STORAGE_HEALTH_ACTIVITY_START) != sizeof(saved_activity_start)) {
+      persist_delete(STORAGE_HEALTH_ACTIVITY_START);
+      return;
+    }    
     persist_read_data(STORAGE_HEALTH_ACTIVITY_START, &saved_activity_start, sizeof(saved_activity_start));
     
     // Validate that the activity is still ongoing
@@ -356,6 +360,17 @@ void health_init() {
         model_set_activity(saved_activity);
     }
   }
+}
+
+
+void health_deinit() {  
+  // Save health activity
+  check_write_status(persist_write_int(STORAGE_HEALTH_ACTIVITY, model->activity), STORAGE_HEALTH_ACTIVITY);
+  check_write_status(persist_write_data(STORAGE_HEALTH_ACTIVITY_START, &activity_start, sizeof(struct ActivityStamp)), STORAGE_HEALTH_ACTIVITY_START); 
+  
+  // Save climb and descend
+  check_write_status(persist_write_int(STORAGE_ALTITUDE_CLIMB, altitude_climb), STORAGE_ALTITUDE_CLIMB);
+  check_write_status(persist_write_int(STORAGE_ALTITUDE_DESCEND, altitude_descend), STORAGE_ALTITUDE_DESCEND); 
 }
 #endif
 
@@ -468,6 +483,12 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
   // Check whether tap events are still required
   if (!(model->update_req & UPDATE_TAPS)) return; 
   
+  // Tap detection is less sentive during runs
+  int tap_threshold = 200;
+  #if defined(PBL_HEALTH)
+  if (model->activity == ACTIVITY_RUN) tap_threshold = 300;
+  #endif
+  
   // Detect minor taps
   bool also_calm = false;
   bool tapped = false;
@@ -477,7 +498,7 @@ void accel_handler(AccelData *data, uint32_t num_samples) {
     int zDiff = abs(data[i + 1].z - data[i].z);
     int diff = (xDiff + yDiff + zDiff) / 8; // Accelerator samples are always multiples of 8?
     
-    if (!(data[i].did_vibrate || data[i + 1].did_vibrate) && diff >= 200) {
+    if (!(data[i].did_vibrate || data[i + 1].did_vibrate) && diff >= tap_threshold) {
       tapping = true; // tap started
     } else if (diff < 50 && tapping) {
       tapping = false; // tap ended
@@ -652,6 +673,9 @@ static void app_init() {
   model_set_time(&time_copy, (TimeUnits)~0);
   if (!bluetooth_connection_service_peek()) model_set_error(ERROR_CONNECTION); // Avoid vibrate on initialize
   
+  // Initialise utils, sleep has to be initialised before health
+  utils_init();
+  
   // Load health data
   #if defined(PBL_HEALTH)
   health_init();
@@ -661,7 +685,7 @@ static void app_init() {
   setlocale(LC_TIME, i18n_get_system_locale());
     
   // Initialize view & utils
-  utils_init();
+  
   view_init();
   
   // Set up watch communication
@@ -687,26 +711,19 @@ static void app_deinit() {
   connection_service_unsubscribe();
   app_message_deregister_callbacks();
   
-  // De-initialize view, utils & config
+  // De-initialize view, utils, config & health
   view_deinit();
   utils_deinit();
   config_deinit();
+  #if defined(PBL_HEALTH)
+  health_deinit();
+  #endif
   
   // Unsubscribe from tick service, view_deinit() will register to minutes
   tick_timer_service_unsubscribe();
   
   // Clear messages left in the message queue
   message_queue_deinit();
-  
-  // Save health activity
-  #if defined(PBL_HEALTH)
-  persist_write_int(STORAGE_HEALTH_ACTIVITY, model->activity);
-  persist_write_data(STORAGE_HEALTH_ACTIVITY_START, &activity_start, sizeof(struct ActivityStamp)); 
-  
-  // Save climb and descend
-  persist_write_int(STORAGE_ALTITUDE_CLIMB, altitude_climb);
-  persist_write_int(STORAGE_ALTITUDE_DESCEND, altitude_descend); 
-  #endif
 }
 
 int main(void) {

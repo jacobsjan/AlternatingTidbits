@@ -113,6 +113,7 @@
             "media": [
                 {
                     "file": "images/menu_icon",
+                    "memoryFormat": "1Bit",
                     "menuIcon": true,
                     "name": "IMAGE_MENU_ICON",
                     "targetPlatforms": null,
@@ -148,7 +149,6 @@
         },
         "sdkVersion": "3",
         "targetPlatforms": [
-            "aplite",
             "basalt",
             "chalk",
             "diorite",

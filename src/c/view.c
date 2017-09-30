@@ -1364,24 +1364,10 @@ void week_bar_sunday_update_proc(Layer* layer, GContext* ctx) {
   week_bar_update_proc(layer, ctx, false);
 }
 
-// From https://github.com/robisodd/concentricity/blob/master/src/rect2.c
-#if defined(PBL_RECT)
-GPoint get_point_on_rect(int angle, GRect rect) {                         // Returns a point on rect made from center of rect and angle
-  int32_t sin = sin_lookup(angle), cos = cos_lookup(angle);               // Calculate once and store, to make quicker and cleaner
-  int32_t dy = (sin > 0 ? (rect.size.h - 1) : (0 - rect.size.h)) / 2;     // Distance to top or bottom edge (from center)
-  int32_t dx = (cos > 0 ? (rect.size.w - 1) : (0 - rect.size.w)) / 2;     // Distance to left or right edge (from center)
-  if(abs(dx * sin) < abs(dy * cos))                                   // if (distance to vertical line) < (distance to horizontal line)
-    dy = (dx * sin) / cos;                                                // calculate y position on left or right edge
-   else                                                                   // else: (distance to top or bottom edge) < (distance to left or right edge)
-    dx = (dy * cos) / sin;                                                // calculate x position on top or bottom line
-  return GPoint(dx + rect.origin.x + (rect.size.w / 2), dy + rect.origin.y + (rect.size.h / 2));  // Return point on rect
-}
-#endif
-
 void switcher_update_proc(Layer* layer, GContext* ctx) {
   GRect bounds = layer_get_bounds(layer);
   #if defined(PBL_RECT)
-  GRect inner_rect = grect_inset(bounds, GEdgeInsets(14));
+  GRect inner_rect = bounds;
   #elif defined(PBL_ROUND)
   GRect inner_rect = grect_inset(bounds, GEdgeInsets(18));
   #endif
@@ -1392,15 +1378,17 @@ void switcher_update_proc(Layer* layer, GContext* ctx) {
     int angle;
     if (pos < view.alt_layer_count - 2) {
       // Icons move up one place
-      angle = 300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * 20 / ANIMATION_NORMALIZED_MAX;
+      angle = 280 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * 20 / ANIMATION_NORMALIZED_MAX;
     } else {
       // Last icon in the queue makes a long circle
-      angle = 300 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * (240 - pos * 20) / ANIMATION_NORMALIZED_MAX;  
+      angle = 280 - pos * 20 - (ANIMATION_NORMALIZED_MAX - view.switcher_animation_progress) * (200 - pos * 20) / ANIMATION_NORMALIZED_MAX;  
     }
+    
+    GPoint icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(angle));
+    
     #if defined(PBL_RECT)
-    GPoint icon_point = icon_point = get_point_on_rect(DEG_TO_TRIGANGLE(angle - 90), inner_rect);
-    #elif defined(PBL_ROUND)
-    GPoint icon_point = icon_point = gpoint_from_polar(inner_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(angle));
+    // Make an ellips out of a circle by squashing horizontaly
+    icon_point.x = (icon_point.x - PBL_DISPLAY_WIDTH / 2) * PBL_DISPLAY_WIDTH / PBL_DISPLAY_HEIGHT + PBL_DISPLAY_WIDTH / 2;
     #endif
     
     // Draw circle

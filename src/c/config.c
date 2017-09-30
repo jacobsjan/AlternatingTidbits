@@ -1,8 +1,9 @@
 #include <pebble.h>
 #include "config.h"
 #include "configv15.h"
-#include "storage.h"
 #include "crashdetection.h"
+#include "storage.h"
+#include "utils.h"
 
 // Initialize the configuration (see https://forums.pebble.com/t/question-regarding-struct/13104/4)
 struct Config actual_config;
@@ -305,17 +306,19 @@ void config_load() {
       
       // Clear crash history after upgrade
       crash_detection_clear();
+    } else {
+      persist_delete(STORAGE_CONFIG);
     }
   }
 }
 
 void config_save() {
   // Save configuration
-  persist_write_data(STORAGE_CONFIG, config, sizeof(actual_config));
+  check_write_status(persist_write_data(STORAGE_CONFIG, config, sizeof(actual_config)), STORAGE_CONFIG);
   
   // Save countdowns
   if (config->countdown_count > 0) {
-    persist_write_data(STORAGE_COUNTDOWNS, config->countdowns, sizeof(struct CountdownConfig) * config->countdown_count);
+    check_write_status(persist_write_data(STORAGE_COUNTDOWNS, config->countdowns, sizeof(struct CountdownConfig) * config->countdown_count), STORAGE_COUNTDOWNS);
   } else if (persist_exists(STORAGE_COUNTDOWNS)) {
     persist_delete(STORAGE_COUNTDOWNS);
   }

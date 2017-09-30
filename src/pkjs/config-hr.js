@@ -348,16 +348,16 @@ module.exports = [
       },
       {
         "type": "toggle",
-        "messageKey": "cfgEnableLocation",
-        "label": "Location",
-        "defaultValue": true
-      },
-      {
-        "type": "toggle",
         "messageKey": "cfgEnableHeartrate",
         "label": "Heart rate",
         "defaultValue": true,
         "capabilities": ["HEALTH"]
+      },
+      {
+        "type": "toggle",
+        "messageKey": "cfgEnableLocation",
+        "label": "Location",
+        "defaultValue": true
       },
       {
         "type": "toggle",

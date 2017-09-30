@@ -63,13 +63,19 @@ module.exports = function(minified) {
     }
   }
   
-  function removeCountdown() {
+  function removeCountdown() {    
     var removeButtonElement = this.parentNode;
     var dateElement = removeButtonElement.previousSibling;
     var timeElement = dateElement.previousSibling;
     var countdownToElement = timeElement.previousSibling;
     var labelElement = countdownToElement.previousSibling;
     
+    // Replace element in cfgCountdownLabel if this is the first element
+    var countdownLabel = clayConfig.getItemByMessageKey('cfgCountdownLabel');
+    if (countdownLabel.$element[0] === labelElement) {
+      countdownLabel.$element[0] = removeButtonElement.nextSibling;
+    }
+        
     removeButtonElement.parentNode.removeChild(labelElement);
     removeButtonElement.parentNode.removeChild(countdownToElement);
     removeButtonElement.parentNode.removeChild(timeElement);

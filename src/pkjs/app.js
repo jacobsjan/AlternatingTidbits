@@ -247,12 +247,8 @@ Pebble.addEventListener('appmessage', function(e) {
   try {
     console.log('Received message: ' + JSON.stringify(e.payload));
     if (e.payload.FetchAltitude) fetchAltitude(); 
-    if (e.payload.SubscribeAltitude) {
-      lastSubmittedAltitude = Number.MIN_VALUE;
-      lastSubmittedAltitudeAccuracy = Number.MIN_VALUE;
-      altitudeWatchId = navigator.geolocation.watchPosition(processAltitude, failedAltitude);
-    } 
-    if (e.payload.UnsubscribeAltitude) navigator.geolocation.clearWatch(altitudeWatchId);
+    if (e.payload.SubscribeAltitude) subscribeAltitude(); 
+    if (e.payload.UnsubscribeAltitude) unsubscribeAltitude();
     if (e.payload.FetchLocation) findLocation(fetchLocation);
     if (e.payload.FetchMoonphase) fetchMoonphase();
     if (e.payload.FetchSun) findLocation(fetchSun);
@@ -301,6 +297,37 @@ function findLocation(callback) {
   }
 }
 
+function unsubscribeAltitude() {
+  // Unsubscribe in a different thread to avoid crashes
+  setTimeout(function () {
+    navigator.geolocation.clearWatch(altitudeWatchId);
+    altitudeWatchId = null;
+  }, 1000);
+}
+
+function subscribeAltitude() {
+  lastSubmittedAltitude = Number.MIN_VALUE;
+  lastSubmittedAltitudeAccuracy = Number.MIN_VALUE;
+
+  var position = null;
+  altitudeWatchId = navigator.geolocation.watchPosition(function(p) { position = p; } , failedAltitude, { enableHighAccuracy: true });
+  
+  // Watch for a whole minute to warm up before starting the real subscription
+  setTimeout(function () {
+    // Make sure not unsubscribed during first temp minute
+    if (altitudeWatchId) {
+      // Unsubscribe temporary position watch
+      navigator.geolocation.clearWatch(altitudeWatchId);
+      
+      // Submit last altitude found during first minute
+      if (position) processAltitude(position);
+
+      // Subscribe definitive altitude watch
+      altitudeWatchId = navigator.geolocation.watchPosition(processAltitude, failedAltitude, { enableHighAccuracy: true });
+    }
+  }, 60000);
+}
+  
 function processAltitude(position) {
   // Was an altitude provided?
   if (!position.coords.altitude) {
@@ -329,29 +356,38 @@ function processAltitude(position) {
 }
 
 function fetchAltitude() {
-  navigator.geolocation.getCurrentPosition( function(position) {
-      // Was an altitude provided?
-      if (!position.coords.altitude) {
-        failedAltitude( {
-          code: 0,
-          message: "Altitude not available."
+  // Subscribe to position
+  var position = null;
+  var id = navigator.geolocation.watchPosition(function(newPosition) {
+    position = newPosition;
+  }, failedAltitude, { enableHighAccuracy: true });
+  
+  // Timeout after 1 minute
+  (
+    function(watchId) {
+      setTimeout(function () {
+        // Unsubscribe from position
+        navigator.geolocation.clearWatch(watchId);
+        
+        // Was an altitude provided?
+        if (!position || !position.coords.altitude) {
+          failedAltitude( {
+            code: 0,
+            message: "Altitude not available."
+          });
+          return;
+        }
+    
+        var currentAltitude = position.coords.altitude;
+        var currentAccuracy = position.coords.altitudeAccuracy;
+        console.log('Altitude: ' + position.coords.altitude + 'm (accuracy ' + position.coords.altitudeAccuracy + 'm)');
+    
+        sendMessage({
+          'Altitude': Math.round(currentAltitude * 1000),
+          'AltitudeAccuracy': Math.round(currentAccuracy * 1000)
         });
-        return;
-      }
-    
-      var currentAltitude = position.coords.altitude;
-      var currentAccuracy = position.coords.altitudeAccuracy;
-      console.log('Altitude: ' + position.coords.altitude + 'm (accuracy ' + position.coords.altitudeAccuracy + 'm)');
-    
-      sendMessage({
-        'Altitude': Math.round(currentAltitude * 1000),
-        'AltitudeAccuracy': Math.round(currentAccuracy * 1000)
-      });
-    } , failedAltitude , { 
-      enableHighAccuracy: true,
-      maximumAge: 300000,
-      timeout: 59000
-    } );
+      }, 60000);
+  })(id);
 }
 
 function failedAltitude(err) {
