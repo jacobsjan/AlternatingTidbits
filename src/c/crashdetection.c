@@ -6,14 +6,15 @@
 
 enum CrashZone crash_zone;
 
+#ifndef PBL_PLATFORM_APLITE
 void crash_enter_zone(enum CrashZone zone) {
   crash_zone |= zone;
-  check_write_status(persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone), STORAGE_CRASH_DETECTOR_ZONE);
+  persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone);
 }
 
 void crash_leave_zone(enum CrashZone zone) {
   crash_zone &= ~zone;
-  check_write_status(persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone), STORAGE_CRASH_DETECTOR_ZONE);
+  persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone);
 }
 
 void crash_detection_clear() {
@@ -58,10 +59,10 @@ void crash_detection_init() {
     ++num_crashes;
     
     // Save crash info
-    check_write_status(persist_write_int(STORAGE_CRASH_NUM, num_crashes), STORAGE_CRASH_NUM);
-    check_write_status(persist_write_data(STORAGE_CRASH_TIMESTAMPS, crash_timestamps, sizeof(crash_timestamps)), STORAGE_CRASH_TIMESTAMPS);
-    check_write_status(persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone), STORAGE_CRASH_DETECTOR_ZONE); // Clearing
-    check_write_status(persist_write_data(STORAGE_CRASH_ZONES, crash_zones, sizeof(crash_zones)), STORAGE_CRASH_ZONES);
+    persist_write_int(STORAGE_CRASH_NUM, num_crashes);
+    persist_write_data(STORAGE_CRASH_TIMESTAMPS, crash_timestamps, sizeof(crash_timestamps));
+    persist_write_int(STORAGE_CRASH_DETECTOR_ZONE, crash_zone); // Clearing
+    persist_write_data(STORAGE_CRASH_ZONES, crash_zones, sizeof(crash_zones));
     
     // Send crash to analytics 
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Exception, zone));  
@@ -79,10 +80,18 @@ void crash_detection_init() {
   }
   
   // Mark app as running to enable crash detection
-  check_write_status(persist_write_bool(STORAGE_CRASH_DETECTOR, true), STORAGE_CRASH_DETECTOR);
+  persist_write_bool(STORAGE_CRASH_DETECTOR, true);
 }
 
 void crash_detection_deinit() {
   // Mark no crash occured
   persist_delete(STORAGE_CRASH_DETECTOR);
 }
+
+#else 
+void crash_detection_clear() { }
+void crash_detection_deinit() { }
+void crash_detection_init() { }
+void crash_enter_zone(enum CrashZone zone) { }
+void crash_leave_zone(enum CrashZone zone) { }
+#endif

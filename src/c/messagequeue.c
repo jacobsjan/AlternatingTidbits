@@ -13,6 +13,7 @@ bool js_ready = false;
 static bool sending = false;
 
 void merge_messages() {
+#ifndef PBL_PLATFORM_APLITE
   // Count number of tuplets
   int new_count = 0;
   MessageQueue* old_queue = message_queue;
@@ -57,6 +58,7 @@ void merge_messages() {
     // Replace with new queue
     message_queue = new_queue;
   }
+#endif
 }
 
 void message_queue_js_is_ready() {

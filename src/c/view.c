@@ -15,14 +15,11 @@ enum SuspensionReasons {
   SUSPENSION_SWITCHER = 4,
 };
 
-#define FIREWORKS_NUM 3
-#ifdef PBL_PLATFORM_APLITE
-#define FIREWORKS_POINTS 100
-#endif
 #ifndef PBL_PLATFORM_APLITE
+#define FIREWORKS_NUM 3
 #define FIREWORKS_POINTS 300
-#endif
 #define FIREWORKS_FRAMES 256
+#endif
 #define FIREWORKS_TOTAL_DURATION 60
 #define FIREWORKS_DURATION ((2000 * ANIMATION_NORMALIZED_MAX) / (FIREWORKS_TOTAL_DURATION * 1000))
 
@@ -69,6 +66,7 @@ struct Fonts {
   GFont icons_large;
 };
 
+#ifndef PBL_PLATFORM_APLITE
 struct Fireworks {  
   int origin_x[FIREWORKS_NUM];
   int origin_y[FIREWORKS_NUM];
@@ -87,6 +85,7 @@ struct Fireworks {
   AnimationProgress animation_progress;
   bool flick_was_enabled;
 };
+#endif
 
 struct View {
   Window *window;
@@ -650,6 +649,7 @@ void happy_countdown_update_proc(Layer *layer, GContext *ctx) {
   graphics_draw_text(ctx, count, view.fonts.primary, draw_bounds, GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);  
 }
 
+#ifndef PBL_PLATFORM_APLITE
 void initiate_fireworks(GRect bounds, int n, int start_base) {
   // Origin
   int cx = (rand() % (bounds.size.w / 2)) + (bounds.size.w / 4);
@@ -876,6 +876,7 @@ void set_of_fireworks(int number_of_seconds) {
     message_queue_send_tuplet(TupletInteger(MESSAGE_KEY_Fireworks, 1)); 
   }
 }
+#endif
 
 #if defined(PBL_HEALTH)
 char* alloc_print_d(char* fmt, int i) {
@@ -1125,6 +1126,7 @@ void heartrate_update_proc(Layer *layer, GContext *ctx) {
 }
 #endif
 
+#ifndef PBL_PLATFORM_APLITE
 bool isSymbol(char* cp) {
   char c = *cp;
   if ((c >= '!' && c <= '/') || (c >= ':' && c <= '@') || (c >= '[' && c <= '`') || (c >= '{' && c <= '~')) {
@@ -1136,7 +1138,7 @@ bool isSymbol(char* cp) {
   }
 }
 
-char** tokenize_text(char* text) {
+char** tokenize_text(char* text) {  
   // Count parts to output
   int parts = 1;
   for (int i = 0; text[i] != 0; i++) {
@@ -1184,12 +1186,14 @@ void free_texts(char** texts) {
   if (texts) while (texts[i]) free(texts[i++]);
   free(texts);
 }
+#endif
 
 void location_update_proc(Layer *layer, GContext *ctx) {
+  #ifndef PBL_PLATFORM_APLITE
   // Colorize the texts
   char **top_texts = tokenize_text(model->location1); 
   char **middle_texts = tokenize_text(model->location2); 
-  char **bottom_texts = tokenize_text(model->location3); 
+  char **bottom_texts = tokenize_text(model->location3);
   
   // Draw
   draw_multi_centered(layer, ctx, ICON_LOCATION, config->color_secondary, count_texts(top_texts), top_texts, count_texts(middle_texts), middle_texts, count_texts(bottom_texts), bottom_texts);
@@ -1197,7 +1201,15 @@ void location_update_proc(Layer *layer, GContext *ctx) {
   // Free texts
   free_texts(top_texts);
   free_texts(middle_texts);
-  free_texts(bottom_texts);
+  free_texts(bottom_texts);  
+  #else  
+  // Draw using less code for aplite
+  char *top_texts[] = { model->location1 }; 
+  char *middle_texts[] = { model->location2 }; 
+  char *bottom_texts[] = { model->location3 };
+  
+  draw_multi_centered(layer, ctx, ICON_LOCATION, config->color_secondary, 1, top_texts, 1, middle_texts, 1, bottom_texts);
+  #endif
 }
 
 void moonphase_update_proc(Layer *layer, GContext *ctx) {
@@ -1565,8 +1577,17 @@ void evaluate_happiness() {
       // Re-activate switcher
       if (config->alternate_mode != 'M') model_add_update_req(UPDATE_FLICKS);
       
+      #ifndef PBL_PLATFORM_APLITE
       // Show fireworks 
       set_of_fireworks(FIREWORKS_TOTAL_DURATION - diff);
+      #else
+      // Destroy layer, no fireworks on aplite 
+      if (view.layers.fireworks) {
+        layer_remove_from_parent(view.layers.fireworks);
+        layer_destroy(view.layers.fireworks);    
+        view.layers.fireworks = NULL;
+      }
+      #endif
     }
   }
 }

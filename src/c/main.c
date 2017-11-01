@@ -156,6 +156,11 @@ static void msg_received_handler(DictionaryIterator *iter, void *context) {
       nullPtr();
     }
     
+    // Vibrate on config update 
+    if (!should_keep_quiet()) {
+      vibes_short_pulse();
+    }
+    
     // Restart view  
     view_deinit();
     view_init();
@@ -365,12 +370,12 @@ void health_init() {
 
 void health_deinit() {  
   // Save health activity
-  check_write_status(persist_write_int(STORAGE_HEALTH_ACTIVITY, model->activity), STORAGE_HEALTH_ACTIVITY);
-  check_write_status(persist_write_data(STORAGE_HEALTH_ACTIVITY_START, &activity_start, sizeof(struct ActivityStamp)), STORAGE_HEALTH_ACTIVITY_START); 
+  persist_write_int(STORAGE_HEALTH_ACTIVITY, model->activity);
+  persist_write_data(STORAGE_HEALTH_ACTIVITY_START, &activity_start, sizeof(struct ActivityStamp)); 
   
   // Save climb and descend
-  check_write_status(persist_write_int(STORAGE_ALTITUDE_CLIMB, altitude_climb), STORAGE_ALTITUDE_CLIMB);
-  check_write_status(persist_write_int(STORAGE_ALTITUDE_DESCEND, altitude_descend), STORAGE_ALTITUDE_DESCEND); 
+  persist_write_int(STORAGE_ALTITUDE_CLIMB, altitude_climb);
+  persist_write_int(STORAGE_ALTITUDE_DESCEND, altitude_descend); 
 }
 #endif
 

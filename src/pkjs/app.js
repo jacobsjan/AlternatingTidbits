@@ -416,6 +416,7 @@ function extractLocationProperty(location, property) {
       break;
     case constants.CITY_TOWN_HAMLET:
       if (location.address.hamlet) return location.address.hamlet;
+      if (location.address.village) return location.address.village;
       if (location.address.town) return location.address.town;
       if (location.address.city) return location.address.city;
       break;

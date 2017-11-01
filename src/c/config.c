@@ -314,11 +314,11 @@ void config_load() {
 
 void config_save() {
   // Save configuration
-  check_write_status(persist_write_data(STORAGE_CONFIG, config, sizeof(actual_config)), STORAGE_CONFIG);
+  persist_write_data(STORAGE_CONFIG, config, sizeof(actual_config));
   
   // Save countdowns
   if (config->countdown_count > 0) {
-    check_write_status(persist_write_data(STORAGE_COUNTDOWNS, config->countdowns, sizeof(struct CountdownConfig) * config->countdown_count), STORAGE_COUNTDOWNS);
+    persist_write_data(STORAGE_COUNTDOWNS, config->countdowns, sizeof(struct CountdownConfig) * config->countdown_count);
   } else if (persist_exists(STORAGE_COUNTDOWNS)) {
     persist_delete(STORAGE_COUNTDOWNS);
   }
