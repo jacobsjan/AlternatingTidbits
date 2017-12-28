@@ -38,10 +38,7 @@ bool should_keep_quiet() {
 bool is_heartrate_available() {
   HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
   if (hr & HealthServiceAccessibilityMaskAvailable) {
-    HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    if(val > 0) {
-      return true;
-    }
+    return true;
   }  
   return false;
 }

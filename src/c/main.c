@@ -23,6 +23,7 @@ void altitude_req_changed(bool required);
   
 #if defined(PBL_HEALTH)
 #define ACTIVITY_MONITOR_WINDOW 10
+#define FIT_ACTIVITY_MONITOR_WINDOW(index) ((index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW)
 const int STEPS_PER_MINUTE_WALKING = 45;
 const int STEPS_PER_MINUTE_RUNNING = 120;
   
@@ -191,13 +192,13 @@ void update_health() {
     // Buffer isn't completely full yet
     first_index = 0;
   } else {
-    first_index = (activity_buffer_index + 1) % ACTIVITY_MONITOR_WINDOW;
+    first_index = FIT_ACTIVITY_MONITOR_WINDOW(activity_buffer_index + 1);
   }
   if (first_index != last_index) {
     // Check for counter reset at midnight
     if (activity_buffer[last_index].totalStepCount < activity_buffer[first_index].totalStepCount) {
       // Invert values in the buffer below zero, the last minute before midnight will seem like a pauze as no data of it is available
-      int maxValuesIndex = (last_index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+      int maxValuesIndex = FIT_ACTIVITY_MONITOR_WINDOW(last_index - 1);
       struct ActivityStamp maxValues = activity_buffer[maxValuesIndex];
       for (int i = 0; i < ACTIVITY_MONITOR_WINDOW; ++i) {
         if (i != last_index) {
@@ -219,7 +220,7 @@ void update_health() {
     
     // Calculate average step pace
     avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[first_index].totalStepCount;
-    avg_steps_per_minute /= (last_index - first_index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+    avg_steps_per_minute /= FIT_ACTIVITY_MONITOR_WINDOW(last_index - first_index);
   } else {
     // Only one point in the buffer, we need at least two to compare them
     avg_steps_per_minute = 0;
@@ -258,11 +259,23 @@ void update_health() {
         
         // Make sure we didn't start a run rather than a walk
         if (current_activity == ACTIVITY_WALK) {
-          avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[first_index].totalStepCount;
-          avg_steps_per_minute /= (last_index - first_index + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW;
+          int start_index = first_index;
+          
+          // Discard the first activity minute if there are more than one, possibly only partially running
+          if (FIT_ACTIVITY_MONITOR_WINDOW(last_index - start_index) > 1) {
+            start_index = (start_index + 1) % ACTIVITY_MONITOR_WINDOW;
+          }
+          
+          avg_steps_per_minute = activity_buffer[last_index].totalStepCount - activity_buffer[start_index].totalStepCount;
+          avg_steps_per_minute /= FIT_ACTIVITY_MONITOR_WINDOW(last_index - start_index);
           if (avg_steps_per_minute >= STEPS_PER_MINUTE_RUNNING) {
             // Started a run rather than a walk
             current_activity = ACTIVITY_RUN;
+            
+            // Check whether to include the first minute or not
+            if (first_index != start_index && activity_buffer[start_index].totalStepCount - activity_buffer[first_index].totalStepCount < STEPS_PER_MINUTE_RUNNING) {
+              first_index = start_index;
+            }
           }
         }
       }
@@ -276,7 +289,7 @@ void update_health() {
   if (avg_steps_per_minute > 0 && (current_activity == ACTIVITY_WALK || current_activity == ACTIVITY_RUN)) {
     // Find the last minute we actually walked/ran
     bool foundActivity = false;
-    for (int index = last_index, prev_index = (index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW; prev_index != first_index; index = prev_index, prev_index = (index - 1 + ACTIVITY_MONITOR_WINDOW) % ACTIVITY_MONITOR_WINDOW) {
+    for (int index = last_index, prev_index = FIT_ACTIVITY_MONITOR_WINDOW(index - 1); prev_index != first_index; index = prev_index, prev_index = FIT_ACTIVITY_MONITOR_WINDOW(index - 1)) {
       int steps_this_minute = activity_buffer[index].totalStepCount - activity_buffer[prev_index].totalStepCount;
         if (steps_this_minute < (current_activity == ACTIVITY_WALK ? STEPS_PER_MINUTE_WALKING : STEPS_PER_MINUTE_RUNNING)) {
           // We were not walking/running this minute

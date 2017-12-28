@@ -5,6 +5,8 @@ try{
   // While these are necessary for the weather lookup to work in iOS, they brake the emulator
 }
 
+var APP_VERSION = '2.2';
+
 var MessageQueue = require('./libs/js-message-queue');
 var constants = require('./constants');
 var Analytics = require('./libs/analytics.js');
@@ -30,19 +32,19 @@ function calculateTimezoneOffset(timezone) {
 // Initialize settings, don't know how to retrieve these neatly from clay
 var settings = {};
 try {
-    settings = JSON.parse(localStorage.getItem('clay-settings'));
-  
-    if (!settings) {
-      // No clay settings found, initializing settings to defaults
-      settings = {
-        "cfgEnableTimezone": false,
-        "cfgTemperatureUnits": 'C',
-        "cfgWeatherProvider": constants.YRNO,
-        "cfgWeatherLocPhone": true
-      };
-    }
-  } catch (e) {
-    console.error(e.toString());
+  settings = JSON.parse(localStorage.getItem('clay-settings'));
+
+  if (!settings) {
+    // No clay settings found, initializing settings to defaults
+    settings = {
+      "cfgEnableTimezone": false,
+      "cfgTemperatureUnits": 'C',
+      "cfgWeatherProvider": constants.YRNO,
+      "cfgWeatherLocPhone": true
+    };
+  }
+} catch (e) {
+  console.error(e.toString());
 }
 
 // Make the watchface configurable using Clay
@@ -60,15 +62,21 @@ clay.registerComponent(require('./clay-component-dateformat'));
 clay.registerComponent(require('./clay-component-timezone'));
 
 Pebble.addEventListener('showConfiguration', function(e) {
-  // Show HR or default config page?
-  if (heartrateAvailable) {
-    clay.config = clayConfigHR;
-  } else {
-    clay.config = clayConfig;
+  try {
+    // Show HR or default config page?
+    if (heartrateAvailable) {
+      clay.config = clayConfigHR;
+    } else {
+      clay.config = clayConfig;
+    }
+    
+    // Open configuration page
+    Pebble.openURL(clay.generateUrl());  
   }
-  
-  // Open configuration page
-  Pebble.openURL(clay.generateUrl());
+  catch (err) {
+    console.warn('AddEventListener showConfiguration error: ' + err);
+    analytics.trackException(err);
+  }
 });
 
 Pebble.addEventListener('webviewclosed', function(e) {
@@ -211,16 +219,19 @@ function nack(e) {
 }
 
 function pingAnalytics() {
-  // Ping maximally every hour
-  var lastPing = window.localStorage.getItem('analyticsLastPing');
-  var mSinceLastPing = Math.floor((new Date() - new Date(lastPing)) / (60 * 1000));
-  if (lastPing === undefined || mSinceLastPing >= 60) {
-    console.log("Pinging, last analytics ping was " + mSinceLastPing + "m ago.");
-    analytics.trackEvent('watchface', 'Alive');
-    window.localStorage.setItem('analyticsLastPing', new Date());
-  } else {
-    console.log("Last analytics ping was only " + mSinceLastPing + "m ago.");
+  try {
+    // Ping maximally every hour
+    var lastPing = window.localStorage.getItem('analyticsLastPing');
+    var mSinceLastPing = Math.floor((new Date() - new Date(lastPing)) / (60 * 1000));
+    if (lastPing === undefined || mSinceLastPing >= 60) {
+      console.log("Pinging, last analytics ping was " + mSinceLastPing + "m ago.");
+      analytics.trackEvent('watchface', 'Alive');
+      window.localStorage.setItem('analyticsLastPing', new Date());
+    } else {
+      console.log("Last analytics ping was only " + mSinceLastPing + "m ago.");
+    }
   }
+  catch(err) {}
 }
 
 Pebble.addEventListener('ready', function(e) {
@@ -237,7 +248,7 @@ Pebble.addEventListener('ready', function(e) {
   }
   
   // Initialize analytics
-  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', '1.5');
+  analytics = new Analytics('UA-89182749-1', 'Alternating Tidbits', APP_VERSION);
 
   // Signal analytics
   pingAnalytics();
@@ -258,7 +269,7 @@ Pebble.addEventListener('appmessage', function(e) {
     if (e.payload.Fireworks) analytics.trackEvent('watchface', 'Fireworks');
   }
   catch (err) {
-    console.warn('AddEventListener error: ' + err);
+    console.warn('AddEventListener appmessage error: ' + err);
     analytics.trackException(err);
   }
   
@@ -272,6 +283,7 @@ function geoloc(latitude, longitude)
 }
 
 function findLocation(callback) {
+  try {
     if (!settings.cfgWeatherLocPhone) {
       // Retrieve location from settings
       var loc = new geoloc(settings.cfgWeatherLocLat, settings.cfgWeatherLocLong);
@@ -294,6 +306,11 @@ function findLocation(callback) {
         timeout: 30000, //30 seconds
         maximumAge: 300000, //5 minutes
       });
+    }
+  }
+  catch (err) {
+    console.warn('Findlocation error: ' + err);
+    analytics.trackException(err);
   }
 }
 
@@ -475,39 +492,44 @@ function processLocation(location) {
 }
 
 function fetchLocation(loc) {
-  // Do we need an OpenStreetMap call or are only latitude and longitude required?
-  var location1cfg, location2cfg, location3cfg;
-  location1cfg = settings.Location1 ? parseInt(settings.Location1) : constants.EMPTY;
-  location2cfg = settings.Location2 ? parseInt(settings.Location2) : constants.EMPTY;
-  location3cfg = settings.Location3 ? parseInt(settings.Location3) : constants.CITY_TOWN_HAMLET;
-  if ((location1cfg == constants.EMPTY || (location1cfg >= constants.LATITUDE_DEGREES && location1cfg <= constants.LONGITUDE_DECIMAL)) &&
-      (location2cfg == constants.EMPTY || (location2cfg >= constants.LATITUDE_DEGREES && location2cfg <= constants.LONGITUDE_DECIMAL)) &&
-      (location3cfg == constants.EMPTY || (location3cfg >= constants.LATITUDE_DEGREES && location3cfg <= constants.LONGITUDE_DECIMAL))) {
-    // No OpenStreetMap call necessary 
-    var location = {
-      lat: loc.latitude,
-      lon: loc.longitude
-    };
-    console.log("Keeping it local :-)");
-    processLocation(location);
-  }  else {  
-    // Call to OpenStreetMap required
-    var req = new XMLHttpRequest();
-    req.open("GET", "http://nominatim.openstreetmap.org/reverse?format=json&lat=" + loc.latitude + "&lon=" + loc.longitude, true);
-    req.setRequestHeader("User-Agent", "Alternating Tidbits Pebble watchface");
-    req.onload = function(e) {
-      if(req.status == 200) {
-        var response = JSON.parse(req.responseText);
-        processLocation(response);
-      }
-      else {
-        failedLocation(req.status, "OpenStreetMap returned error");
-      }
-    };
-    req.onerror = function(e) {
-      failedLocation(e);
-    };
-    req.send(null);
+  try {
+    // Do we need an OpenStreetMap call or are only latitude and longitude required?
+    var location1cfg, location2cfg, location3cfg;
+    location1cfg = settings.Location1 ? parseInt(settings.Location1) : constants.EMPTY;
+    location2cfg = settings.Location2 ? parseInt(settings.Location2) : constants.EMPTY;
+    location3cfg = settings.Location3 ? parseInt(settings.Location3) : constants.CITY_TOWN_HAMLET;
+    if ((location1cfg == constants.EMPTY || (location1cfg >= constants.LATITUDE_DEGREES && location1cfg <= constants.LONGITUDE_DECIMAL)) &&
+        (location2cfg == constants.EMPTY || (location2cfg >= constants.LATITUDE_DEGREES && location2cfg <= constants.LONGITUDE_DECIMAL)) &&
+        (location3cfg == constants.EMPTY || (location3cfg >= constants.LATITUDE_DEGREES && location3cfg <= constants.LONGITUDE_DECIMAL))) {
+      // No OpenStreetMap call necessary 
+      var location = {
+        lat: loc.latitude,
+        lon: loc.longitude
+      };
+      processLocation(location);
+    }  else {  
+      // Call to OpenStreetMap required
+      var req = new XMLHttpRequest();
+      req.open("GET", "http://nominatim.openstreetmap.org/reverse?format=json&lat=" + loc.latitude + "&lon=" + loc.longitude, true);
+      req.setRequestHeader("User-Agent", "Alternating Tidbits Pebble watchface");
+      req.onload = function(e) {
+        if(req.status == 200) {
+          var response = JSON.parse(req.responseText);
+          processLocation(response);
+        }
+        else {
+          failedLocation(req.status, "OpenStreetMap returned error");
+        }
+      };
+      req.onerror = function(e) {
+        failedLocation(e);
+      };
+      req.send(null);
+    }
+  }
+  catch (err) {
+    console.warn('Fetchlocation error: ' + err);
+    analytics.trackException(err);
   }
 }
 
@@ -519,14 +541,20 @@ function failedLocation(err) {
 }
 
 function fetchMoonphase() {
-  var SunCalc = require('./libs/suncalc');
-  var moon = SunCalc.getMoonIllumination(new Date());  
-  console.log('Moon phase: ' + Math.round(moon.phase * 360) + ", illumination: " + Math.round(moon.fraction * 100));
-  
-  sendMessage({
-    'Moonphase': Math.round(moon.phase * 360),
-    'Moonillumination': Math.round(moon.fraction * 100)
-  });
+  try {
+    var SunCalc = require('./libs/suncalc');
+    var moon = SunCalc.getMoonIllumination(new Date());  
+    console.log('Moon phase: ' + Math.round(moon.phase * 360) + ", illumination: " + Math.round(moon.fraction * 100));
+
+    sendMessage({
+      'Moonphase': Math.round(moon.phase * 360),
+      'Moonillumination': Math.round(moon.fraction * 100)
+    });
+  } 
+  catch (err) {
+    console.warn('FetchMoonphase error: ' + err);
+    analytics.trackException(err);
+  }
 }
 
 function fetchSun(loc) {

@@ -1018,10 +1018,17 @@ char** health_generate_texts(enum HealthIndicator indicator) {
         metric = (int)health_service_peek_current_value(HealthMetricHeartRateBPM);
       }
     
-      result[0] = alloc_print_d("%d", metric);
-      result[1] = alloc_print_s("bpm");
-      result[2] = NULL;
-      result[3] = NULL;
+      if (metric > 0) {
+        result[0] = alloc_print_d("%d", metric);
+        result[1] = alloc_print_s("bpm");
+        result[2] = NULL;
+        result[3] = NULL;
+      } else {
+        result[0] = NULL;
+        result[1] = NULL;
+        result[2] = NULL;
+        result[3] = NULL;
+      }
       break;
     #endif
   }
@@ -1864,7 +1871,17 @@ static void alert_timeout_handler(void *context) {
   view.suspension_reason &= ~SUSPENSION_ERROR_ALERT;
   
   // Show the layer hidden by the alert when not in the switcher
-  if (!(view.suspension_reason & SUSPENSION_SWITCHER)) alternating_layers_show(view.suspension_return_layer);
+  if (!(view.suspension_reason & SUSPENSION_SWITCHER)) {
+    #if defined(PBL_HEALTH)
+    if (view.suspension_reason & SUSPENSION_ACTIVITY) {
+      // Reactivate the health layer if on suspension
+      alternating_layers_show_layer(view.layers.health);
+    } else
+    #endif
+    {
+      alternating_layers_show(view.suspension_return_layer);
+    }
+  }
   
   // Deregister timeout handler
   view.alert_timeout_handler = NULL;

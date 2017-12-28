@@ -8,7 +8,6 @@
 // Initialize the configuration (see https://forums.pebble.com/t/question-regarding-struct/13104/4)
 struct Config actual_config;
 struct Config* config = &actual_config;
-int countdownIndex = 0;
 
 bool parse_configuration_messages(DictionaryIterator* iter) {
   bool cfgChanged = false;
@@ -118,6 +117,7 @@ bool parse_configuration_messages(DictionaryIterator* iter) {
   #endif 
   
   // Countdown
+  int countdownIndex = 0;
   tuple = dict_find(iter, MESSAGE_KEY_cfgCountdownCount);
   if(tuple && (cfgChanged = true)) {
     config->countdown_count = tuple->value->int32;
